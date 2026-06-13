@@ -6,7 +6,11 @@ import { generateAuthenticationOptions } from "@simplewebauthn/server";
 
 export async function POST(req) {
   const host = req.headers.get("host") || "localhost:3000";
-  const rpID = process.env.WEBAUTHN_RP_ID || host.split(":")[0];
+  const isLocalRequest = host.includes("localhost") || host.includes("127.0.0.1");
+  let rpID = process.env.WEBAUTHN_RP_ID;
+  if (!rpID || (rpID === "localhost" && !isLocalRequest)) {
+    rpID = host.split(":")[0];
+  }
 
   const options = await generateAuthenticationOptions({
     rpID: rpID,

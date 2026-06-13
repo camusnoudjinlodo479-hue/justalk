@@ -9,8 +9,17 @@ import { createSessionToken, sessionCookieOptions } from "@/lib/session";
 
 export async function POST(req) {
   const host = req.headers.get("host") || "localhost:3000";
-  const rpID = process.env.WEBAUTHN_RP_ID || host.split(":")[0];
-  const origin = process.env.WEBAUTHN_ORIGIN || (host.includes("localhost") || host.includes("127.0.0.1") ? `http://${host}` : `https://${host}`);
+  const isLocalRequest = host.includes("localhost") || host.includes("127.0.0.1");
+  
+  let rpID = process.env.WEBAUTHN_RP_ID;
+  if (!rpID || (rpID === "localhost" && !isLocalRequest)) {
+    rpID = host.split(":")[0];
+  }
+  
+  let origin = process.env.WEBAUTHN_ORIGIN;
+  if (!origin || (origin.includes("localhost") && !isLocalRequest)) {
+    origin = isLocalRequest ? `http://${host}` : `https://${host}`;
+  }
 
   const { pseudo, faceHash, attestation } = await req.json();
 
