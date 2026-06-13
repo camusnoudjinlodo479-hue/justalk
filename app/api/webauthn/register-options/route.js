@@ -6,9 +6,10 @@ import { generateRegistrationOptions } from "@simplewebauthn/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 
 const RP_NAME = "Justalk";
-const RP_ID = process.env.WEBAUTHN_RP_ID || "localhost";
 
 export async function POST(req) {
+  const host = req.headers.get("host") || "localhost:3000";
+  const rpID = process.env.WEBAUTHN_RP_ID || host.split(":")[0];
   const { pseudo, faceHash } = await req.json();
 
   // Anti-doublon facial (optionnel) : seulement si un faceHash est fourni
@@ -35,7 +36,7 @@ export async function POST(req) {
 
   const options = await generateRegistrationOptions({
     rpName: RP_NAME,
-    rpID: RP_ID,
+    rpID,
     userID,
     userName: pseudo || `user-${userID.slice(0, 8)}`,
     attestationType: "none",

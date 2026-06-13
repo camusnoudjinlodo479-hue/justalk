@@ -7,10 +7,11 @@ import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { createSessionToken, sessionCookieOptions } from "@/lib/session";
 
-const RP_ID = process.env.WEBAUTHN_RP_ID || "localhost";
-const ORIGIN = process.env.WEBAUTHN_ORIGIN || "http://localhost:3000";
-
 export async function POST(req) {
+  const host = req.headers.get("host") || "localhost:3000";
+  const rpID = process.env.WEBAUTHN_RP_ID || host.split(":")[0];
+  const origin = process.env.WEBAUTHN_ORIGIN || (host.includes("localhost") || host.includes("127.0.0.1") ? `http://${host}` : `https://${host}`);
+
   const { pseudo, faceHash, attestation } = await req.json();
 
   const cookieRaw = req.cookies.get("justalk_reg_challenge")?.value;
@@ -24,8 +25,8 @@ export async function POST(req) {
     verification = await verifyRegistrationResponse({
       response: attestation,
       expectedChallenge: challenge,
-      expectedOrigin: ORIGIN,
-      expectedRPID: RP_ID,
+      expectedOrigin: origin,
+      expectedRPID: rpID,
     });
   } catch (e) {
     return NextResponse.json({ error: "Vérification WebAuthn invalide." }, { status: 400 });

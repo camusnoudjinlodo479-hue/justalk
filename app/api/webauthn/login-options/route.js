@@ -4,11 +4,12 @@
 import { NextResponse } from "next/server";
 import { generateAuthenticationOptions } from "@simplewebauthn/server";
 
-const RP_ID = process.env.WEBAUTHN_RP_ID || "localhost";
+export async function POST(req) {
+  const host = req.headers.get("host") || "localhost:3000";
+  const rpID = process.env.WEBAUTHN_RP_ID || host.split(":")[0];
 
-export async function POST() {
   const options = await generateAuthenticationOptions({
-    rpID: RP_ID,
+    rpID: rpID,
     userVerification: "required",
     // allowCredentials vide -> le navigateur propose tous les passkeys Justalk
     // disponibles sur l'appareil (discoverable credentials).
