@@ -65,7 +65,7 @@ export default function LoginPage() {
                 Connexion biométrique
               </h1>
               <p className="text-slate-500 text-sm mt-1">
-                Utilise Face ID, Windows Hello ou Touch ID pour accéder à ton compte.
+                Utilise la reconnaissance faciale ou l'empreinte digitale de ton appareil (Android, iOS ou Windows) pour accéder à ton compte.
               </p>
             </div>
             <button onClick={handleLogin} className="btn-primary w-full flex items-center justify-center gap-2">
