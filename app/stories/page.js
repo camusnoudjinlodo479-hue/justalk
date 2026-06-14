@@ -6,8 +6,7 @@ import Header from "@/components/layout/Header";
 import MobileNav from "@/components/layout/MobileNav";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { X, ChevronLeft, ChevronRight, Eye } from "lucide-react";
-import { collection, query, orderBy, onSnapshot, doc, setDoc, serverTimestamp, where } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 
 export default function StoriesPage() {
   const { user, firebaseReady } = useCurrentUser();
@@ -17,23 +16,49 @@ export default function StoriesPage() {
   const [loading, setLoading] = useState(true);
 
   // Écoute des stories actives en temps réel
+  async function fetchStories() {
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("stories")
+      .select("*")
+      .gt("expires_at", now)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      setStories(
+        data.map((s) => ({
+          id: s.id,
+          authorId: s.author_id,
+          pseudo: s.pseudo,
+          avatarUrl: s.avatar_url,
+          mediaUrl: s.media_url,
+          createdAt: s.created_at,
+          expiresAt: s.expires_at,
+        }))
+      );
+    }
+    setLoading(false);
+  }
+
   useEffect(() => {
     if (!firebaseReady) return;
-    const q = query(collection(db, "stories"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      const activeStories = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((s) => {
-          const expiresAt = s.expiresAt?.toDate ? s.expiresAt.toDate() : new Date(s.expiresAt);
-          return expiresAt > new Date();
-        });
-      setStories(activeStories);
-      setLoading(false);
-    }, (err) => {
-      console.error("Erreur de récupération des stories :", err);
-      setLoading(false);
-    });
-    return () => unsub();
+
+    fetchStories();
+
+    const channel = supabase
+      .channel("stories-page-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "stories" },
+        () => {
+          fetchStories();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [firebaseReady]);
 
   // Détecte le paramètre de requête 'id' dans l'URL pour sélectionner la story active
@@ -57,19 +82,40 @@ export default function StoriesPage() {
     if (active.authorId === user.uid) return;
 
     const viewId = `${user.uid}_${active.id}`;
-    const viewRef = doc(db, "story_views", viewId);
-    setDoc(viewRef, {
-      storyId: active.id,
-      viewerId: user.uid,
-      viewerPseudo: user.pseudo,
-      viewerAvatarUrl: user.avatarUrl || null,
-      createdAt: serverTimestamp(),
-    }).catch((err) => {
-      console.error("Erreur enregistrement de vue story :", err);
-    });
+    
+    async function recordView() {
+      await supabase.from("story_views").upsert({
+        id: viewId,
+        story_id: active.id,
+        viewer_id: user.uid,
+        viewer_pseudo: user.pseudo,
+        viewer_avatar_url: user.avatarUrl || null,
+      });
+    }
+
+    recordView();
   }, [active?.id, user?.uid, firebaseReady]);
 
   // Écoute les personnes ayant vu la story active (uniquement pour le créateur)
+  async function fetchViewers() {
+    if (!active?.id) return;
+    const { data } = await supabase
+      .from("story_views")
+      .select("*")
+      .eq("story_id", active.id)
+      .order("created_at", { ascending: false });
+
+    if (data) {
+      setViewers(
+        data.map((v) => ({
+          id: v.id,
+          viewerPseudo: v.viewer_pseudo,
+          viewerAvatarUrl: v.viewer_avatar_url,
+        }))
+      );
+    }
+  }
+
   useEffect(() => {
     if (!user?.uid || !active?.id || !firebaseReady) {
       setViewers([]);
@@ -80,13 +126,22 @@ export default function StoriesPage() {
       return;
     }
 
-    const q = query(collection(db, "story_views"), where("storyId", "==", active.id));
-    const unsub = onSnapshot(q, (snap) => {
-      setViewers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    }, (err) => {
-      console.error("Erreur de récupération des vues :", err);
-    });
-    return () => unsub();
+    fetchViewers();
+
+    const channel = supabase
+      .channel(`story-views-${active.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "story_views", filter: `story_id=eq.${active.id}` },
+        () => {
+          fetchViewers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [active?.id, user?.uid, firebaseReady]);
 
   return (

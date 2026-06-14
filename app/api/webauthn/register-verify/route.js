@@ -1,10 +1,10 @@
 // app/api/webauthn/register-verify/route.js
-// Vérifie la réponse WebAuthn (attestation), crée l'utilisateur Firestore et
+// Vérifie la réponse WebAuthn (attestation), crée l'utilisateur Supabase et
 // enregistre l'empreinte faciale chiffrée (faceHash) pour l'anti-doublon.
 // Pose le cookie de session JWT httpOnly à la fin.
 import { NextResponse } from "next/server";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
-import { adminDb } from "@/lib/firebaseAdmin";
+import { createSupabaseAdmin } from "@/lib/supabase";
 import { createSessionToken, sessionCookieOptions } from "@/lib/session";
 
 export async function POST(req) {
@@ -49,11 +49,14 @@ export async function POST(req) {
     const { credentialID, credentialPublicKey, counter } = verification.registrationInfo;
     const uid = userID;
 
-    // 1. Crée le document utilisateur
-    await adminDb.collection("users").doc(uid).set({
+    const supabaseAdmin = createSupabaseAdmin();
+
+    // 1. Crée le document utilisateur dans Supabase
+    const { error: userError } = await supabaseAdmin.from("users").insert({
+      id: uid,
       pseudo,
-      avatarUrl: null,
-      createdAt: new Date().toISOString(),
+      avatar_url: null,
+      created_at: new Date().toISOString(),
       authenticators: [
         {
           credentialID: Buffer.from(credentialID).toString("base64url"),
@@ -63,14 +66,20 @@ export async function POST(req) {
       ],
     });
 
-    // 2. Enregistre le hash facial chiffré côté serveur (anti-doublon optionnel,
-    // si face-api.js est utilisé) — jamais la photo, jamais le vecteur brut.
+    if (userError) {
+      throw userError;
+    }
+
+    // 2. Enregistre le hash facial chiffré côté serveur (anti-doublon)
     if (faceHash) {
-      await adminDb.collection("biometricHashes").doc(uid).set({
-        faceHash,
+      const { error: hashError } = await supabaseAdmin.from("biometric_hashes").insert({
         uid,
-        createdAt: new Date().toISOString(),
+        face_hash: faceHash,
+        created_at: new Date().toISOString(),
       });
+      if (hashError) {
+        console.error("Erreur enregistrement empreinte faciale :", hashError);
+      }
     }
 
     // 3. Session JWT httpOnly -> reconnexion automatique

@@ -4,8 +4,7 @@
 // Permet de leur envoyer une invitation à discuter
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { MessageSquare, Users } from "lucide-react";
 
@@ -16,27 +15,45 @@ export default function RightSidebar() {
 
   useEffect(() => {
     if (!currentUser?.uid || !firebaseReady) return;
-    
-    const q = query(
-      collection(db, "users"),
-      orderBy("createdAt", "desc"),
-      limit(25)
-    );
 
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const list = snap.docs
-          .map((d) => ({ id: d.id, ...d.data() }))
+    async function fetchMembers() {
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(25);
+
+      if (!error && data) {
+        const list = data
+          .map((u) => ({
+            id: u.id,
+            pseudo: u.pseudo,
+            displayName: u.display_name,
+            avatarUrl: u.avatar_url,
+            online: u.online,
+          }))
           .filter((u) => u.id !== currentUser.uid);
         setMembers(list);
-      },
-      (err) => {
-        console.error("Erreur lors de la récupération des membres :", err);
       }
-    );
+    }
 
-    return () => unsub();
+    fetchMembers();
+
+    // Écoute en temps réel de toute modification sur la table users (inscription, profil, statut en ligne)
+    const channel = supabase
+      .channel("right-sidebar-users")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "users" },
+        () => {
+          fetchMembers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentUser?.uid, firebaseReady]);
 
   if (!currentUser) return null;
@@ -111,4 +128,3 @@ export default function RightSidebar() {
     </aside>
   );
 }
-

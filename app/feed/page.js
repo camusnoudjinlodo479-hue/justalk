@@ -1,26 +1,8 @@
 "use client";
 // app/feed/page.js
-// Fil d'actualité : stories + composeur + posts avec scroll infini (Firestore).
-import { useEffect, useState, useCallback, useRef } from "react";
-import {
-  collection,
-  query,
-  orderBy,
-  limit,
-  startAfter,
-  getDocs,
-  addDoc,
-  serverTimestamp,
-  onSnapshot,
-  doc,
-  updateDoc,
-  deleteDoc,
-  setDoc,
-  increment,
-  where,
-} from "firebase/firestore";
-import { db, storage } from "@/lib/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+// Fil d'actualité : stories + composeur + posts avec scroll infini (Supabase).
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/Header";
 import MobileNav from "@/components/layout/MobileNav";
 import LeftSidebar from "@/components/layout/LeftSidebar";
@@ -31,141 +13,241 @@ import PostCard from "@/components/feed/PostCard";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Search } from "lucide-react";
 
-const PAGE_SIZE = 5;
-
 export default function FeedPage() {
   const { user, firebaseReady } = useCurrentUser();
   const [posts, setPosts] = useState([]);
-  const [lastDoc, setLastDoc] = useState(null);
-  const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const sentinelRef = useRef(null);
 
   const [usersMap, setUsersMap] = useState({});
   const [myLikes, setMyLikes] = useState({});
   const [stories, setStories] = useState([]);
 
-  // Écoute des utilisateurs en temps réel
+  // Récupération initiale des posts
+  async function fetchPosts() {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("posts")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    
+    if (!error && data) {
+      const mapped = data.map((p) => ({
+        id: p.id,
+        authorId: p.author_id,
+        text: p.text,
+        imageUrl: p.image_url,
+        videoUrl: p.video_url,
+        likes: p.likes,
+        commentsCount: p.comments_count,
+        shares: p.shares,
+        createdAt: p.created_at,
+      }));
+      setPosts(mapped);
+    }
+    setLoading(false);
+  }
+
+  // Écoute des posts en temps réel
   useEffect(() => {
-    if (!firebaseReady) return;
-    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+    if (!firebaseReady || !user?.uid) return;
+
+    fetchPosts();
+
+    const channel = supabase
+      .channel("posts-realtime-feed")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "posts" },
+        () => {
+          fetchPosts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [firebaseReady, user?.uid]);
+
+  // Récupération et écoute des profils utilisateurs
+  async function fetchUsers() {
+    const { data } = await supabase.from("users").select("*");
+    if (data) {
       const map = {};
-      snap.docs.forEach((d) => {
-        map[d.id] = d.data();
+      data.forEach((u) => {
+        map[u.id] = {
+          pseudo: u.pseudo,
+          avatarUrl: u.avatar_url,
+          displayName: u.display_name,
+        };
       });
       setUsersMap(map);
-    });
-    return () => unsub();
-  }, [firebaseReady]);
-
-  // Écoute des likes de l'utilisateur connecté en temps réel
-  useEffect(() => {
-    if (!user?.uid || !firebaseReady) return;
-    const q = query(collection(db, "likes"), where("userId", "==", user.uid));
-    const unsub = onSnapshot(q, (snap) => {
-      const likesMap = {};
-      snap.docs.forEach((d) => {
-        likesMap[d.data().postId] = true;
-      });
-      setMyLikes(likesMap);
-    }, (err) => {
-      console.error("Erreur likes sync:", err);
-    });
-    return () => unsub();
-  }, [user?.uid, firebaseReady]);
-
-  // Écoute des stories actives en temps réel
-  useEffect(() => {
-    if (!firebaseReady) return;
-    const q = query(collection(db, "stories"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      const activeStories = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((s) => {
-          const expiresAt = s.expiresAt?.toDate ? s.expiresAt.toDate() : new Date(s.expiresAt);
-          return expiresAt > new Date();
-        });
-      setStories(activeStories);
-    }, (err) => {
-      console.error("Erreur stories sync:", err);
-    });
-    return () => unsub();
-  }, [firebaseReady]);
-
-  async function handleLike(postId, isLiked) {
-    if (!user) return;
-    const likeId = `${user.uid}_${postId}`;
-    const likeRef = doc(db, "likes", likeId);
-    const postRef = doc(db, "posts", postId);
-    try {
-      if (isLiked) {
-        await setDoc(likeRef, { userId: user.uid, postId, createdAt: serverTimestamp() });
-        await updateDoc(postRef, { likes: increment(1) });
-      } else {
-        await deleteDoc(likeRef);
-        await updateDoc(postRef, { likes: increment(-1) });
-      }
-    } catch (err) {
-      console.error("Erreur like toggle:", err);
     }
   }
 
+  useEffect(() => {
+    if (!firebaseReady) return;
+
+    fetchUsers();
+
+    const channel = supabase
+      .channel("users-realtime-feed")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "users" },
+        () => {
+          fetchUsers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [firebaseReady]);
+
+  // Récupération et écoute des likes de l'utilisateur connecté
+  async function fetchMyLikes() {
+    if (!user?.uid) return;
+    const { data } = await supabase
+      .from("likes")
+      .select("post_id")
+      .eq("user_id", user.uid);
+    
+    if (data) {
+      const likesMap = {};
+      data.forEach((l) => {
+        likesMap[l.post_id] = true;
+      });
+      setMyLikes(likesMap);
+    }
+  }
+
+  useEffect(() => {
+    if (!user?.uid || !firebaseReady) return;
+
+    fetchMyLikes();
+
+    const channel = supabase
+      .channel("likes-realtime-feed")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "likes", filter: `user_id=eq.${user.uid}` },
+        () => {
+          fetchMyLikes();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.uid, firebaseReady]);
+
+  // Récupération et écoute des stories
+  async function fetchStories() {
+    const now = new Date().toISOString();
+    const { data } = await supabase
+      .from("stories")
+      .select("*")
+      .gt("expires_at", now)
+      .order("created_at", { ascending: false });
+
+    if (data) {
+      setStories(
+        data.map((s) => ({
+          id: s.id,
+          authorId: s.author_id,
+          pseudo: s.pseudo,
+          avatarUrl: s.avatar_url,
+          mediaUrl: s.media_url,
+          createdAt: s.created_at,
+          expiresAt: s.expires_at,
+        }))
+      );
+    }
+  }
+
+  useEffect(() => {
+    if (!firebaseReady) return;
+
+    fetchStories();
+
+    const channel = supabase
+      .channel("stories-realtime-feed")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "stories" },
+        () => {
+          fetchStories();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [firebaseReady]);
+
+  // Gère le like/unlike d'une publication
+  async function handleLike(postId, isLiked) {
+    if (!user) return;
+    try {
+      if (isLiked) {
+        await supabase.from("likes").insert({
+          user_id: user.uid,
+          post_id: postId,
+        });
+      } else {
+        await supabase
+          .from("likes")
+          .delete()
+          .eq("user_id", user.uid)
+          .eq("post_id", postId);
+      }
+    } catch (err) {
+      console.error("Erreur de basculement du like :", err);
+    }
+  }
+
+  // Publie une story
   async function handleCreateStory(file) {
     if (!user) return;
     try {
-      const fileRef = ref(storage, `stories/${user.uid}/${Date.now()}_${file.name}`);
-      const uploadResult = await uploadBytes(fileRef, file);
-      const mediaUrl = await getDownloadURL(uploadResult.ref);
-      
-      const createdAt = new Date();
-      const expiresAt = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000); // 24h later
+      const filePath = `stories/${user.uid}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("justalk")
+        .upload(filePath, file);
 
-      await addDoc(collection(db, "stories"), {
-        authorId: user.uid,
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("justalk")
+        .getPublicUrl(filePath);
+
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      const { error: insertError } = await supabase.from("stories").insert({
+        author_id: user.uid,
         pseudo: user.pseudo,
-        avatarUrl: user.avatarUrl || null,
-        mediaUrl,
-        createdAt: serverTimestamp(),
-        expiresAt: expiresAt,
+        avatar_url: user.avatarUrl || null,
+        media_url: publicUrl,
+        expires_at: expiresAt,
       });
+
+      if (insertError) throw insertError;
     } catch (err) {
       console.error("Erreur création story :", err);
       alert("L'upload de la story a échoué.");
     }
   }
 
-  const filteredPosts = posts.filter((p) => {
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return (
-      p.text?.toLowerCase().includes(q) ||
-      p.author?.pseudo?.toLowerCase().includes(q)
-    );
-  });
-
-  useEffect(() => {
-    if (!user?.uid || !firebaseReady) return;
-    setLoading(true);
-    const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(50));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoading(false);
-      },
-      (err) => {
-        console.error("Erreur chargement posts en temps réel :", err);
-        setLoading(false);
-      }
-    );
-    return () => unsub();
-  }, [user?.uid, firebaseReady]);
-
+  // Publie un post
   async function handlePublish({ text, mediaFile }) {
     if (!user) return;
     
-    // URL temporaire pour la prévisualisation optimiste locale
     const tempUrl = mediaFile ? URL.createObjectURL(mediaFile) : null;
     const isVideo = mediaFile?.type?.startsWith("video/");
 
@@ -186,35 +268,46 @@ export default function FeedPage() {
 
     try {
       let mediaUrl = null;
-      let mediaType = null;
-
       if (mediaFile) {
         try {
-          const fileRef = ref(storage, `posts/${user.uid}/${Date.now()}_${mediaFile.name}`);
-          const uploadResult = await uploadBytes(fileRef, mediaFile);
-          mediaUrl = await getDownloadURL(uploadResult.ref);
-          mediaType = isVideo ? "video" : "image";
+          const filePath = `posts/${user.uid}/${Date.now()}_${mediaFile.name}`;
+          const { error: uploadError } = await supabase.storage
+            .from("justalk")
+            .upload(filePath, mediaFile);
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from("justalk")
+            .getPublicUrl(filePath);
+
+          mediaUrl = publicUrl;
         } catch (storageErr) {
           console.error("Erreur d'upload Storage :", storageErr);
-          alert("L'upload de la photo/vidéo a échoué. Le post sera publié sans média.");
+          alert("L'upload a échoué. Publication sans média.");
         }
       }
 
-      await addDoc(collection(db, "posts"), {
+      await supabase.from("posts").insert({
+        author_id: user.uid,
         text,
-        authorId: user.uid,
-        author: { pseudo: user.pseudo, avatarUrl: user.avatarUrl || null },
-        imageUrl: mediaType === "image" ? mediaUrl : null,
-        videoUrl: mediaType === "video" ? mediaUrl : null,
-        likes: 0,
-        commentsCount: 0,
-        shares: 0,
-        createdAt: serverTimestamp(),
+        image_url: !isVideo ? mediaUrl : null,
+        video_url: isVideo ? mediaUrl : null,
       });
     } catch (e) {
       console.error("Erreur publication:", e);
     }
   }
+
+  const filteredPosts = posts.filter((p) => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    const resolvedAuthor = usersMap[p.authorId];
+    return (
+      p.text?.toLowerCase().includes(q) ||
+      resolvedAuthor?.pseudo?.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="min-h-screen pb-16">
@@ -239,11 +332,10 @@ export default function FeedPage() {
           </div>
 
           {filteredPosts.map((post) => {
-            const resolvedAuthor = usersMap[post.authorId] || post.author;
+            const resolvedAuthor = usersMap[post.authorId];
             const postWithResolvedAuthor = {
               ...post,
               author: {
-                ...post.author,
                 pseudo: resolvedAuthor?.pseudo || post.author?.pseudo || "Utilisateur",
                 avatarUrl: resolvedAuthor?.avatarUrl || post.author?.avatarUrl || null,
               },

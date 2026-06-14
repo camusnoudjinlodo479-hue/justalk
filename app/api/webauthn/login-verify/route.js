@@ -4,7 +4,7 @@
 // et pose le cookie de session JWT httpOnly.
 import { NextResponse } from "next/server";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
-import { adminDb } from "@/lib/firebaseAdmin";
+import { createSupabaseAdmin } from "@/lib/supabase";
 import { createSessionToken, sessionCookieOptions } from "@/lib/session";
 
 export async function POST(req) {
@@ -28,23 +28,22 @@ export async function POST(req) {
   }
 
   const credentialID = assertion.id; // base64url
-  const usersRef = adminDb.collection("users");
-  const snap = await usersRef
-    .where("authenticators", "!=", null)
-    .get();
+  const supabaseAdmin = createSupabaseAdmin();
 
-  let userDoc = null;
-  let authenticator = null;
-  snap.forEach((doc) => {
-    const auths = doc.data().authenticators || [];
-    const match = auths.find((a) => a.credentialID === credentialID);
-    if (match) {
-      userDoc = doc;
-      authenticator = match;
-    }
-  });
+  // Recherche l'utilisateur ayant le credentialID dans le tableau JSONB authenticators
+  const { data: matchedUsers, error: usersError } = await supabaseAdmin
+    .from("users")
+    .select("*")
+    .filter("authenticators", "cs", JSON.stringify([{ credentialID }]));
 
-  if (!userDoc || !authenticator) {
+  if (usersError || !matchedUsers || matchedUsers.length === 0) {
+    return NextResponse.json({ error: "Aucun compte associé à cette empreinte." }, { status: 404 });
+  }
+
+  const dbUser = matchedUsers[0];
+  const authenticator = dbUser.authenticators.find((a) => a.credentialID === credentialID);
+
+  if (!authenticator) {
     return NextResponse.json({ error: "Aucun compte associé à cette empreinte." }, { status: 404 });
   }
 
@@ -70,15 +69,19 @@ export async function POST(req) {
   }
 
   // Met à jour le compteur anti-replay
-  const auths = userDoc.data().authenticators.map((a) =>
+  const auths = dbUser.authenticators.map((a) =>
     a.credentialID === authenticator.credentialID
       ? { ...a, counter: verification.authenticationInfo.newCounter }
       : a
   );
-  await userDoc.ref.update({ authenticators: auths });
+  
+  await supabaseAdmin
+    .from("users")
+    .update({ authenticators: auths })
+    .eq("id", dbUser.id);
 
-  const token = await createSessionToken({ uid: userDoc.id, pseudo: userDoc.data().pseudo });
-  const res = NextResponse.json({ uid: userDoc.id });
+  const token = await createSessionToken({ uid: dbUser.id, pseudo: dbUser.pseudo });
+  const res = NextResponse.json({ uid: dbUser.id });
   res.cookies.set(sessionCookieOptions().name, token, sessionCookieOptions());
   res.cookies.delete("justalk_login_challenge");
   return res;

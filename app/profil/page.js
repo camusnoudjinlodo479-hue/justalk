@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { auth, db, storage } from "@/lib/firebase";
+import { auth } from "@/lib/firebase"; // Conservé uniquement pour la déconnexion locale si requise
+import { supabase } from "@/lib/supabase";
 import EditProfileModal from "@/components/profile/EditProfileModal";
 import { Camera, Cake, Link as LinkIcon, Plus } from "lucide-react";
 import Header from "@/components/layout/Header";
@@ -11,22 +12,6 @@ import MobileNav from "@/components/layout/MobileNav";
 import PostCard from "@/components/feed/PostCard";
 import CreatePost from "@/components/feed/CreatePost";
 import { useCurrentUser } from "@/lib/useCurrentUser";
-import {
-  doc,
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  addDoc,
-  serverTimestamp,
-  setDoc,
-  deleteDoc,
-  updateDoc,
-  increment,
-  where,
-  limit,
-} from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 const TABS = ["Publications", "À propos", "Amis", "Photos"];
 
@@ -48,7 +33,7 @@ export default function ProfilePage() {
   async function handleLogout() {
     try {
       await fetch("/api/session/logout", { method: "POST" });
-      await auth.signOut();
+      await auth.signOut().catch(() => {});
       router.push("/");
       router.refresh();
     } catch (err) {
@@ -70,98 +55,241 @@ export default function ProfilePage() {
   const profile = targetUser || user || fetchedUser;
   const isMyProfile = !targetUid || (fetchedUser && targetUid === fetchedUser.uid);
 
-  // Écoute de l'utilisateur affiché en temps réel
+  // Écoute de l'utilisateur affiché en temps réel via Supabase
+  async function fetchProfile() {
+    if (!profile?.uid) return;
+    const { data } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", profile.uid)
+      .maybeSingle();
+
+    if (data) {
+      const formatted = {
+        uid: data.id,
+        pseudo: data.pseudo,
+        firstName: data.first_name,
+        lastName: data.last_name,
+        displayName: data.display_name,
+        bio: data.bio,
+        avatarUrl: data.avatar_url,
+        coverUrl: data.cover_url,
+        birthdate: data.birthdate,
+        birthdateVisibility: data.birthdate_visibility,
+        online: data.online,
+        createdAt: data.created_at,
+      };
+      if (isMyProfile) {
+        setUser(formatted);
+      } else {
+        setTargetUser(formatted);
+      }
+    }
+  }
+
   useEffect(() => {
     if (!profile?.uid || !firebaseReady) return;
-    const unsub = onSnapshot(doc(db, "users", profile.uid), (snap) => {
-      if (snap.exists()) {
-        const data = { uid: snap.id, ...snap.data() };
-        if (isMyProfile) {
-          setUser(data);
-        } else {
-          setTargetUser(data);
+
+    fetchProfile();
+
+    const channel = supabase
+      .channel(`profile-realtime-${profile.uid}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "users", filter: `id=eq.${profile.uid}` },
+        () => {
+          fetchProfile();
         }
-      }
-    });
-    return () => unsub();
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [profile?.uid, isMyProfile, firebaseReady]);
 
-  // Écoute des utilisateurs en temps réel (pour pseudos/avatars)
-  useEffect(() => {
-    if (!firebaseReady) return;
-    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+  // Écoute des utilisateurs (pour pseudos/avatars)
+  async function fetchUsers() {
+    const { data } = await supabase.from("users").select("*");
+    if (data) {
       const map = {};
-      snap.docs.forEach((d) => {
-        map[d.id] = d.data();
+      data.forEach((u) => {
+        map[u.id] = {
+          pseudo: u.pseudo,
+          avatarUrl: u.avatar_url,
+          displayName: u.display_name,
+        };
       });
       setUsersMap(map);
-    });
-    return () => unsub();
+    }
+  }
+
+  useEffect(() => {
+    if (!firebaseReady) return;
+
+    fetchUsers();
+
+    const channel = supabase
+      .channel("users-profile-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "users" },
+        () => {
+          fetchUsers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [firebaseReady]);
 
-  // Écoute des likes en temps réel
-  useEffect(() => {
-    if (!fetchedUser?.uid || !firebaseReady) return;
-    const q = query(collection(db, "likes"), where("userId", "==", fetchedUser.uid));
-    const unsub = onSnapshot(q, (snap) => {
+  // Écoute des likes
+  async function fetchMyLikes() {
+    if (!fetchedUser?.uid) return;
+    const { data } = await supabase
+      .from("likes")
+      .select("post_id")
+      .eq("user_id", fetchedUser.uid);
+
+    if (data) {
       const likesMap = {};
-      snap.docs.forEach((d) => {
-        likesMap[d.data().postId] = true;
+      data.forEach((l) => {
+        likesMap[l.post_id] = true;
       });
       setMyLikes(likesMap);
-    });
-    return () => unsub();
+    }
+  }
+
+  useEffect(() => {
+    if (!fetchedUser?.uid || !firebaseReady) return;
+
+    fetchMyLikes();
+
+    const channel = supabase
+      .channel(`likes-profile-${fetchedUser.uid}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "likes", filter: `user_id=eq.${fetchedUser.uid}` },
+        () => {
+          fetchMyLikes();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchedUser?.uid, firebaseReady]);
 
   // Écoute des membres récents pour la box Amis
-  useEffect(() => {
-    if (!firebaseReady) return;
-    const q = query(collection(db, "users"), orderBy("createdAt", "desc"), limit(12));
-    const unsub = onSnapshot(q, (snap) => {
-      const list = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
+  async function fetchRecentMembers() {
+    const { data } = await supabase
+      .from("users")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(12);
+
+    if (data) {
+      const list = data
+        .map((u) => ({
+          id: u.id,
+          pseudo: u.pseudo,
+          displayName: u.display_name,
+          avatarUrl: u.avatar_url,
+        }))
         .filter((u) => u.id !== profile?.uid);
       setRecentMembers(list);
-    });
-    return () => unsub();
-  }, [profile?.uid, firebaseReady]);
+    }
+  }
 
-  // Écoute des posts de l'utilisateur affiché en temps réel
   useEffect(() => {
     if (!profile?.uid || !firebaseReady) return;
+
+    fetchRecentMembers();
+
+    const channel = supabase
+      .channel("recent-members-profile")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "users" },
+        () => {
+          fetchRecentMembers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.uid, firebaseReady]);
+
+  // Écoute des posts de l'utilisateur affiché
+  async function fetchProfilePosts() {
+    if (!profile?.uid) return;
     setLoadingPosts(true);
-    
-    const postsRef = collection(db, "posts");
-    const q = query(postsRef, orderBy("createdAt", "desc"));
-    
-    const unsub = onSnapshot(q, (snap) => {
-      const allPosts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      const userPosts = allPosts.filter((p) => p.authorId === profile.uid);
-      setPosts(userPosts);
-      setLoadingPosts(false);
-    }, (err) => {
-      console.error("Erreur lors de la récupération des posts :", err);
-      setLoadingPosts(false);
-    });
-    
-    return () => unsub();
+    const { data, error } = await supabase
+      .from("posts")
+      .select("*")
+      .eq("author_id", profile.uid)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      const mapped = data.map((p) => ({
+        id: p.id,
+        authorId: p.author_id,
+        text: p.text,
+        imageUrl: p.image_url,
+        videoUrl: p.video_url,
+        likes: p.likes,
+        commentsCount: p.comments_count,
+        shares: p.shares,
+        createdAt: p.created_at,
+      }));
+      setPosts(mapped);
+    }
+    setLoadingPosts(false);
+  }
+
+  useEffect(() => {
+    if (!profile?.uid || !firebaseReady) return;
+
+    fetchProfilePosts();
+
+    const channel = supabase
+      .channel(`posts-profile-${profile.uid}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "posts" },
+        () => {
+          fetchProfilePosts();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [profile?.uid, firebaseReady]);
 
   async function handleLike(postId, isLiked) {
     if (!fetchedUser) return;
-    const likeId = `${fetchedUser.uid}_${postId}`;
-    const likeRef = doc(db, "likes", likeId);
-    const postRef = doc(db, "posts", postId);
     try {
       if (isLiked) {
-        await setDoc(likeRef, { userId: fetchedUser.uid, postId, createdAt: serverTimestamp() });
-        await updateDoc(postRef, { likes: increment(1) });
+        await supabase.from("likes").insert({
+          user_id: fetchedUser.uid,
+          post_id: postId,
+        });
       } else {
-        await deleteDoc(likeRef);
-        await updateDoc(postRef, { likes: increment(-1) });
+        await supabase
+          .from("likes")
+          .delete()
+          .eq("user_id", fetchedUser.uid)
+          .eq("post_id", postId);
       }
     } catch (err) {
-      console.error("Erreur like toggle:", err);
+      console.error("Erreur like toggle :", err);
     }
   }
 
@@ -188,30 +316,31 @@ export default function ProfilePage() {
 
     try {
       let mediaUrl = null;
-      let mediaType = null;
-
       if (mediaFile) {
         try {
-          const fileRef = ref(storage, `posts/${fetchedUser.uid}/${Date.now()}_${mediaFile.name}`);
-          const uploadResult = await uploadBytes(fileRef, mediaFile);
-          mediaUrl = await getDownloadURL(uploadResult.ref);
-          mediaType = isVideo ? "video" : "image";
+          const filePath = `posts/${fetchedUser.uid}/${Date.now()}_${mediaFile.name}`;
+          const { error: uploadError } = await supabase.storage
+            .from("justalk")
+            .upload(filePath, mediaFile);
+
+          if (uploadError) throw uploadError;
+
+          const { data: { publicUrl } } = supabase.storage
+            .from("justalk")
+            .getPublicUrl(filePath);
+
+          mediaUrl = publicUrl;
         } catch (storageErr) {
           console.error("Erreur d'upload Storage :", storageErr);
           alert("L'upload a échoué. Publication sans média.");
         }
       }
 
-      await addDoc(collection(db, "posts"), {
+      await supabase.from("posts").insert({
+        author_id: fetchedUser.uid,
         text,
-        authorId: fetchedUser.uid,
-        author: { pseudo: fetchedUser.pseudo, avatarUrl: fetchedUser.avatarUrl || null },
-        imageUrl: mediaType === "image" ? mediaUrl : null,
-        videoUrl: mediaType === "video" ? mediaUrl : null,
-        likes: 0,
-        commentsCount: 0,
-        shares: 0,
-        createdAt: serverTimestamp(),
+        image_url: !isVideo ? mediaUrl : null,
+        video_url: isVideo ? mediaUrl : null,
       });
     } catch (e) {
       console.error("Erreur publication:", e);
@@ -304,14 +433,12 @@ export default function ProfilePage() {
                   <button
                     onClick={async () => {
                       try {
-                        await addDoc(collection(db, "notifications"), {
-                          toUserId: profile.uid,
-                          fromPseudo: fetchedUser?.pseudo || "Quelqu'un",
+                        await supabase.from("notifications").insert({
+                          to_user_id: profile.uid,
+                          from_pseudo: fetchedUser?.pseudo || "Quelqu'un",
                           type: "friend",
                           message: "t'a envoyé une demande d'ami direct (clique pour discuter)",
-                          postId: null,
                           read: false,
-                          createdAt: serverTimestamp(),
                         });
                       } catch (err) {
                         console.error(err);
@@ -359,7 +486,7 @@ export default function ProfilePage() {
         <div className="mt-4 px-3">
           {tab === "Publications" && (
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-              {/* Left Column (spans 2/5 on desktop) */}
+              {/* Left Column */}
               <div className="lg:col-span-2 flex flex-col gap-4">
                 {/* Intro Box */}
                 <div className="card p-4 flex flex-col gap-3">
@@ -428,7 +555,7 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              {/* Right Column (spans 3/5 on desktop) */}
+              {/* Right Column */}
               <div className="lg:col-span-3 flex flex-col gap-4">
                 {isMyProfile && (
                   <CreatePost user={profile} onPublish={handlePublish} />
@@ -436,11 +563,10 @@ export default function ProfilePage() {
                 
                 <div className="flex flex-col gap-4 w-full">
                   {posts.map((post) => {
-                    const resolvedAuthor = usersMap[post.authorId] || post.author;
+                    const resolvedAuthor = usersMap[post.authorId];
                     const postWithResolvedAuthor = {
                       ...post,
                       author: {
-                        ...post.author,
                         pseudo: resolvedAuthor?.pseudo || post.author?.pseudo || "Utilisateur",
                         avatarUrl: resolvedAuthor?.avatarUrl || post.author?.avatarUrl || null,
                       },

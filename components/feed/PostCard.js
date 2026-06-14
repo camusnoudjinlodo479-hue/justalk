@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Heart, MessageCircle, Share2, MoreHorizontal } from "lucide-react";
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 
 export default function PostCard({ post, onLike, onShare }) {
@@ -17,25 +16,41 @@ export default function PostCard({ post, onLike, onShare }) {
   const liked = post.likedByMe || false;
   const likeCount = post.likes || 0;
 
+  // Récupération des commentaires depuis Supabase
+  async function fetchComments() {
+    setLoadingComments(true);
+    const { data, error } = await supabase
+      .from("comments")
+      .select("*")
+      .eq("post_id", post.id)
+      .order("created_at", { ascending: true });
+
+    if (!error && data) {
+      setComments(data);
+    }
+    setLoadingComments(false);
+  }
+
+  // Écoute des commentaires en temps réel
   useEffect(() => {
     if (!post.id || !showComments) return;
-    setLoadingComments(true);
-    const q = query(
-      collection(db, "posts", post.id, "comments"),
-      orderBy("createdAt", "asc")
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setComments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setLoadingComments(false);
-      },
-      (err) => {
-        console.error("Erreur de récupération des commentaires :", err);
-        setLoadingComments(false);
-      }
-    );
-    return () => unsub();
+
+    fetchComments();
+
+    const channel = supabase
+      .channel(`post-comments-${post.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "comments", filter: `post_id=eq.${post.id}` },
+        () => {
+          fetchComments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [post.id, showComments]);
 
   function toggleLike() {
@@ -46,12 +61,13 @@ export default function PostCard({ post, onLike, onShare }) {
     e.preventDefault();
     if (!commentText.trim() || !currentUser) return;
     try {
-      await addDoc(collection(db, "posts", post.id, "comments"), {
-        authorId: currentUser.uid,
+      const { error } = await supabase.from("comments").insert({
+        post_id: post.id,
+        author_id: currentUser.uid,
         author: currentUser.displayName || currentUser.pseudo,
         text: commentText.trim(),
-        createdAt: serverTimestamp(),
       });
+      if (error) throw error;
       setCommentText("");
     } catch (err) {
       console.error("Erreur lors de la publication du commentaire :", err);
@@ -76,7 +92,7 @@ export default function PostCard({ post, onLike, onShare }) {
           <Link href={profileLink} className="font-semibold text-sm text-slate-800 hover:text-electric transition-colors truncate block">
             {post.author?.pseudo}
           </Link>
-          <p className="text-xs text-slate-400">{post.createdAtLabel || "À l'instant"}</p>
+          <p className="text-xs text-slate-400">Publié récemment</p>
         </div>
         <button className="icon-btn w-9 h-9">
           <MoreHorizontal size={16} />

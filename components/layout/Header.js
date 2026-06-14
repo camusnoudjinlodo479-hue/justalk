@@ -4,8 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Logo from "@/components/Logo";
 import { Search, Bell, MessageCircle, Home, Users, X } from "lucide-react";
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 
 export default function Header({ user, notifCount = 0 }) {
   const [searchQuery, setSearchQuery] = useState("");
@@ -21,28 +20,36 @@ export default function Header({ user, notifCount = 0 }) {
     }
   }, []);
 
-  // Écoute des nouveaux inscrits
+  // Écoute des nouveaux inscrits via Supabase Realtime
   useEffect(() => {
     if (!user?.uid) return;
 
-    const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
-    const unsub = onSnapshot(q, (snap) => {
-      snap.docChanges().forEach((change) => {
-        if (change.type === "added") {
-          const data = change.doc.data();
-          if (!data.createdAt) return;
-          const createTime = new Date(data.createdAt).getTime();
+    const channel = supabase
+      .channel("new-users-channel")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "users" },
+        (payload) => {
+          const newUser = payload.new;
+          if (!newUser.created_at) return;
+          const createTime = new Date(newUser.created_at).getTime();
 
           // Nouveau membre inscrit après le chargement de la page, autre que soi-même
-          if (createTime > listenerStartTime.current && change.doc.id !== user.uid) {
-            setNewUserNotification({ uid: change.doc.id, ...data });
+          if (createTime > listenerStartTime.current && newUser.id !== user.uid) {
+            const formattedUser = {
+              uid: newUser.id,
+              pseudo: newUser.pseudo,
+              displayName: newUser.display_name,
+              avatarUrl: newUser.avatar_url,
+            };
+            setNewUserNotification(formattedUser);
 
             // Push notification standard
             if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
               try {
-                new Notification(`${data.displayName || data.pseudo} vient de rejoindre Justalk ! 🚀`, {
+                new Notification(`${newUser.display_name || newUser.pseudo} vient de rejoindre Justalk ! 🚀`, {
                   body: "Cliquez pour lui envoyer une demande de discussion.",
-                  icon: data.avatarUrl || "/icons/icon-192.png",
+                  icon: newUser.avatar_url || "/icons/icon-192.png",
                 });
               } catch (e) {
                 console.error("Erreur push notification native :", e);
@@ -50,10 +57,12 @@ export default function Header({ user, notifCount = 0 }) {
             }
           }
         }
-      });
-    });
+      )
+      .subscribe();
 
-    return () => unsub();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user?.uid]);
 
   // Auto-dismiss de la notification après 10s
@@ -142,14 +151,12 @@ export default function Header({ user, notifCount = 0 }) {
               onClick={async (e) => {
                 e.stopPropagation();
                 try {
-                  await addDoc(collection(db, "notifications"), {
-                    toUserId: newUserNotification.uid,
-                    fromPseudo: user?.pseudo || "Quelqu'un",
+                  await supabase.from("notifications").insert({
+                    to_user_id: newUserNotification.uid,
+                    from_pseudo: user?.pseudo || "Quelqu'un",
                     type: "friend",
                     message: "t'a envoyé une demande d'ami direct (clique pour discuter)",
-                    postId: null,
                     read: false,
-                    createdAt: serverTimestamp(),
                   });
                 } catch (err) {
                   console.error("Erreur envoi demande d'ami :", err);

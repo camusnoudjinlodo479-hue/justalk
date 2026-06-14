@@ -1,8 +1,7 @@
 "use client";
 // app/notifications/page.js
 import { useEffect, useState } from "react";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/Header";
 import MobileNav from "@/components/layout/MobileNav";
 import LeftSidebar from "@/components/layout/LeftSidebar";
@@ -15,18 +14,68 @@ export default function NotificationsPage() {
   const { user, firebaseReady } = useCurrentUser();
   const [notifs, setNotifs] = useState([]);
 
+  // Récupère les notifications depuis Supabase
+  async function fetchNotifications() {
+    if (!user?.uid) return;
+    const { data, error } = await supabase
+      .from("notifications")
+      .select("*")
+      .eq("to_user_id", user.uid)
+      .order("created_at", { ascending: false });
+
+    if (!error && data) {
+      setNotifs(
+        data.map((n) => ({
+          id: n.id,
+          toUserId: n.to_user_id,
+          fromPseudo: n.from_pseudo,
+          type: n.type,
+          message: n.message,
+          read: n.read,
+          createdAt: n.created_at,
+        }))
+      );
+    }
+  }
+
+  // Écoute les notifications en temps réel
   useEffect(() => {
     if (!user?.uid || !firebaseReady) return;
-    const q = query(
-      collection(db, "notifications"),
-      where("toUserId", "==", user.uid),
-      orderBy("createdAt", "desc")
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setNotifs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
+
+    fetchNotifications();
+
+    const channel = supabase
+      .channel(`notifications-${user.uid}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "notifications", filter: `to_user_id=eq.${user.uid}` },
+        () => {
+          fetchNotifications();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user?.uid, firebaseReady]);
+
+  // Marque toutes les notifications non lues comme lues à l'ouverture de la page
+  useEffect(() => {
+    if (!user?.uid || notifs.length === 0) return;
+
+    const unreadIds = notifs.filter((n) => !n.read).map((n) => n.id);
+    if (unreadIds.length > 0) {
+      supabase
+        .from("notifications")
+        .update({ read: true })
+        .in("id", unreadIds)
+        .then(() => {
+          // Re-fetch pour actualiser l'affichage local et le Header
+          fetchNotifications();
+        });
+    }
+  }, [notifs.length, user?.uid]);
 
   return (
     <div className="min-h-screen pb-16">
@@ -56,7 +105,7 @@ export default function NotificationsPage() {
                   <p className="text-sm text-slate-700">
                     <span className="font-semibold">{n.fromPseudo}</span> {n.message}
                   </p>
-                  <p className="text-xs text-slate-400 mt-0.5">{n.createdAtLabel || "À l'instant"}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Notification reçue</p>
                 </div>
               </div>
             );

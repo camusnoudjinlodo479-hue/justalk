@@ -1,15 +1,7 @@
 "use client";
 // components/messenger/ChatWindow.js
 import { useEffect, useRef, useState } from "react";
-import {
-  collection,
-  query,
-  orderBy,
-  onSnapshot,
-  addDoc,
-  serverTimestamp,
-} from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { supabase } from "@/lib/supabase";
 import { Send, Smile, Image as ImageIcon, Video, Phone, ArrowLeft } from "lucide-react";
 
 export default function ChatWindow({ conversation, user, onStartCall, onBack }) {
@@ -17,17 +9,48 @@ export default function ChatWindow({ conversation, user, onStartCall, onBack }) 
   const [text, setText] = useState("");
   const bottomRef = useRef(null);
 
-  // Écoute temps réel des messages de la conversation (Firestore onSnapshot)
+  // Récupération des messages
+  async function fetchMessages() {
+    if (!conversation?.id) return;
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("conversation_id", conversation.id)
+      .order("created_at", { ascending: true });
+
+    if (!error && data) {
+      setMessages(
+        data.map((m) => ({
+          id: m.id,
+          senderId: m.sender_id,
+          senderPseudo: m.sender_pseudo,
+          text: m.text,
+          createdAt: m.created_at,
+        }))
+      );
+    }
+  }
+
+  // Écoute temps réel des messages de la conversation
   useEffect(() => {
     if (!conversation?.id) return;
-    const q = query(
-      collection(db, "conversations", conversation.id, "messages"),
-      orderBy("createdAt", "asc")
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
+
+    fetchMessages();
+
+    const channel = supabase
+      .channel(`chat-messages-${conversation.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${conversation.id}` },
+        () => {
+          fetchMessages();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [conversation?.id]);
 
   useEffect(() => {
@@ -40,14 +63,26 @@ export default function ChatWindow({ conversation, user, onStartCall, onBack }) 
     const content = text.trim();
     setText("");
     try {
-      await addDoc(collection(db, "conversations", conversation.id, "messages"), {
-        senderId: user.uid,
-        senderPseudo: user.pseudo,
+      const { error } = await supabase.from("messages").insert({
+        conversation_id: conversation.id,
+        sender_id: user.uid,
+        sender_pseudo: user.pseudo,
         text: content,
-        createdAt: serverTimestamp(),
       });
+
+      if (error) throw error;
+
+      // Met à jour last_message et la date dans conversations
+      await supabase
+        .from("conversations")
+        .update({
+          last_message: content,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", conversation.id);
+
     } catch (err) {
-      console.error("Erreur envoi message:", err);
+      console.error("Erreur envoi message :", err);
     }
   }
 

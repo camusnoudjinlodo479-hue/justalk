@@ -3,7 +3,7 @@
 // biométrique. Vérifie aussi l'anti-doublon via faceHash avant de continuer.
 import { NextResponse } from "next/server";
 import { generateRegistrationOptions } from "@simplewebauthn/server";
-import { adminDb } from "@/lib/firebaseAdmin";
+import { createSupabaseAdmin } from "@/lib/supabase";
 
 const RP_NAME = "Justalk";
 
@@ -17,22 +17,23 @@ export async function POST(req) {
   const { pseudo, faceHash } = await req.json();
 
   // Anti-doublon facial (optionnel) : seulement si un faceHash est fourni
-  // (face-api.js). Sans caméra, on s'appuie sur l'unicité du passkey WebAuthn.
   if (faceHash) {
     try {
-      const dup = await adminDb
-        .collection("biometricHashes")
-        .where("faceHash", "==", faceHash)
-        .limit(1)
-        .get();
-      if (!dup.empty) {
+      const supabaseAdmin = createSupabaseAdmin();
+      const { data: dup } = await supabaseAdmin
+        .from("biometric_hashes")
+        .select("uid")
+        .eq("face_hash", faceHash)
+        .maybeSingle();
+
+      if (dup) {
         return NextResponse.json(
           { error: "Ce visage est déjà associé à un compte Justalk." },
           { status: 409 }
         );
       }
     } catch (e) {
-      console.warn("Vérification anti-doublon ignorée (Firebase non configuré):", e.message);
+      console.warn("Vérification anti-doublon ignorée (Supabase non configuré):", e.message);
     }
   }
 
