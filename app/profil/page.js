@@ -1,6 +1,6 @@
 "use client";
 // app/profil/page.js
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/lib/firebase"; // Conservé uniquement pour la déconnexion locale si requise
@@ -30,6 +30,7 @@ export default function ProfilePage() {
   const [myLikes, setMyLikes] = useState({});
   const [recentMembers, setRecentMembers] = useState([]);
   const [friendCount, setFriendCount] = useState(0);
+  const storyFileRef = useRef(null);
 
   async function handleLogout() {
     try {
@@ -355,6 +356,38 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleCreateStory(file) {
+    if (!fetchedUser) return;
+    try {
+      const filePath = `stories/${fetchedUser.uid}/${Date.now()}_${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("justalk")
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("justalk")
+        .getPublicUrl(filePath);
+
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      const { error: insertError } = await supabase.from("stories").insert({
+        author_id: fetchedUser.uid,
+        pseudo: fetchedUser.pseudo,
+        avatar_url: fetchedUser.avatarUrl || null,
+        media_url: publicUrl,
+        expires_at: expiresAt,
+      });
+
+      if (insertError) throw insertError;
+      alert("Story publiée avec succès !");
+    } catch (err) {
+      console.error("Erreur création story :", err);
+      alert("L'upload de la story a échoué.");
+    }
+  }
+
   const photos = posts.map((p) => p.imageUrl).filter((url) => !!url);
 
   return (
@@ -426,9 +459,19 @@ export default function ProfilePage() {
             <div className="flex flex-wrap items-center justify-center gap-2.5 shrink-0 md:mb-2 w-full md:w-auto">
               {isMyProfile ? (
                 <>
-                  <button onClick={() => setEditOpen(true)} className="btn-primary flex items-center gap-1.5 py-2 px-4 text-xs font-bold rounded-lg shadow-sm border-0 cursor-pointer">
+                  <button onClick={() => storyFileRef.current?.click()} className="btn-primary flex items-center gap-1.5 py-2 px-4 text-xs font-bold rounded-lg shadow-sm border-0 cursor-pointer">
                     <Plus size={14} /> Ajouter à la story
                   </button>
+                  <input
+                    ref={storyFileRef}
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleCreateStory(file);
+                    }}
+                  />
                   <button onClick={() => setEditOpen(true)} className="flex items-center gap-1.5 py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-lg transition-colors border-0 cursor-pointer">
                     Modifier le profil
                   </button>
