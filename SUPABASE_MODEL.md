@@ -105,6 +105,8 @@ create table messages (
   sender_id uuid not null references users(id) on delete cascade,
   sender_pseudo text not null,
   text text not null,
+  image_url text,
+  audio_url text,
   created_at timestamptz default now()
 );
 
@@ -123,6 +125,7 @@ create table groups (
 create table notifications (
   id uuid primary key default uuid_generate_v4(),
   to_user_id uuid not null references users(id) on delete cascade,
+  from_user_id uuid references users(id) on delete cascade,
   from_pseudo text not null,
   type text not null,
   message text not null,
@@ -130,13 +133,33 @@ create table notifications (
   read boolean default false,
   created_at timestamptz default now()
 );
+
+-- 12. Table friendships (Relations d'amitié)
+create table friendships (
+  id uuid primary key default uuid_generate_v4(),
+  user_id_1 uuid not null references users(id) on delete cascade,
+  user_id_2 uuid not null references users(id) on delete cascade,
+  status text not null check (status in ('pending', 'accepted')),
+  sender_id uuid not null references users(id) on delete cascade,
+  created_at timestamptz default now(),
+  unique(user_id_1, user_id_2)
+);
+
+-- 13. Table analytics (Vues des publications)
+create table analytics (
+  id uuid primary key default uuid_generate_v4(),
+  post_id uuid not null references posts(id) on delete cascade,
+  viewer_id uuid not null references users(id) on delete cascade,
+  viewed_at timestamptz default now(),
+  unique(post_id, viewer_id)
+);
 ```
 
 ## Enable Realtime Publications
 
 ```sql
 -- Activer Supabase Realtime sur les tables clés
-alter publication supabase_realtime add table users, posts, comments, likes, stories, story_views, messages, conversations, notifications;
+alter publication supabase_realtime add table users, posts, comments, likes, stories, story_views, messages, conversations, notifications, friendships, analytics;
 ```
 
 ## Database Triggers (Compteurs & Notifications automatiques)

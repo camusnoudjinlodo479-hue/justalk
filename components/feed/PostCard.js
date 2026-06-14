@@ -53,6 +53,23 @@ export default function PostCard({ post, onLike, onShare }) {
     };
   }, [post.id, showComments]);
 
+  // Enregistrement d'une vue unique dans analytics (si spectateur !== auteur)
+  useEffect(() => {
+    if (!currentUser?.uid || !post.id || currentUser.uid === post.authorId) return;
+
+    async function recordView() {
+      try {
+        await supabase.from("analytics").insert({
+          post_id: post.id,
+          viewer_id: currentUser.uid,
+        });
+      } catch (err) {
+        // Ignorer silencieusement si la ligne existe déjà
+      }
+    }
+    recordView();
+  }, [post.id, currentUser?.uid, post.authorId]);
+
   function toggleLike() {
     onLike?.(post.id, !liked);
   }

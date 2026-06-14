@@ -28,6 +28,7 @@ export default function NotificationsPage() {
         data.map((n) => ({
           id: n.id,
           toUserId: n.to_user_id,
+          fromUserId: n.from_user_id,
           fromPseudo: n.from_pseudo,
           type: n.type,
           message: n.message,
@@ -77,6 +78,63 @@ export default function NotificationsPage() {
     }
   }, [notifs.length, user?.uid]);
 
+  async function handleAccept(notif) {
+    if (!user) return;
+    try {
+      const u1 = notif.fromUserId < user.uid ? notif.fromUserId : user.uid;
+      const u2 = notif.fromUserId > user.uid ? notif.fromUserId : user.uid;
+      
+      const { error: friendErr } = await supabase
+        .from("friendships")
+        .update({ status: "accepted" })
+        .eq("user_id_1", u1)
+        .eq("user_id_2", u2);
+        
+      if (friendErr) throw friendErr;
+      
+      // Envoyer une notification de confirmation
+      await supabase.from("notifications").insert({
+        to_user_id: notif.fromUserId,
+        from_user_id: user.uid,
+        from_pseudo: user.pseudo || "Quelqu'un",
+        type: "friend_accept",
+        message: "a accepté ta demande d'ami direct",
+        read: false,
+      });
+      
+      // Supprimer la notification d'invitation d'origine
+      await supabase.from("notifications").delete().eq("id", notif.id);
+      
+      fetchNotifications();
+      alert("Demande d'ami acceptée !");
+    } catch (err) {
+      alert("Erreur lors de l'acceptation : " + err.message);
+    }
+  }
+
+  async function handleDecline(notif) {
+    if (!user) return;
+    try {
+      const u1 = notif.fromUserId < user.uid ? notif.fromUserId : user.uid;
+      const u2 = notif.fromUserId > user.uid ? notif.fromUserId : user.uid;
+      
+      const { error: friendErr } = await supabase
+        .from("friendships")
+        .delete()
+        .eq("user_id_1", u1)
+        .eq("user_id_2", u2);
+        
+      if (friendErr) throw friendErr;
+      
+      // Supprimer la notification
+      await supabase.from("notifications").delete().eq("id", notif.id);
+      
+      fetchNotifications();
+    } catch (err) {
+      alert("Erreur lors du refus : " + err.message);
+    }
+  }
+
   return (
     <div className="min-h-screen pb-16">
       <Header user={user} notifCount={notifs.filter((n) => !n.read).length} />
@@ -106,6 +164,22 @@ export default function NotificationsPage() {
                     <span className="font-semibold">{n.fromPseudo}</span> {n.message}
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5">Notification reçue</p>
+                  {n.type === "friend" && (
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => handleAccept(n)}
+                        className="btn-primary py-1 px-3 text-xs rounded-lg font-semibold border-0 cursor-pointer"
+                      >
+                        Accepter
+                      </button>
+                      <button
+                        onClick={() => handleDecline(n)}
+                        className="bg-slate-100 hover:bg-red-100 text-slate-800 py-1 px-3 text-xs rounded-lg font-semibold transition-colors border-0 cursor-pointer"
+                      >
+                        Refuser
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             );

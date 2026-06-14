@@ -89,10 +89,15 @@ export default function FaceScanStep({ pseudo, onSuccess }) {
             : "Lancer le scan biométrique"}
         </button>
       ) : (
-        <p className="text-xs text-slate-400 max-w-xs">
-          La biométrie native n'est pas disponible sur cet appareil. Tu passeras par le schéma
-          3x3 à l'étape suivante.
-        </p>
+        <div className="flex flex-col items-center gap-3 w-full max-w-xs">
+          <p className="text-xs text-slate-400">
+            La biométrie native n'est pas disponible sur cet appareil. Tu passeras par le schéma
+            3x3 à l'étape suivante.
+          </p>
+          <button type="button" onClick={() => onSuccess({})} className="btn-primary w-full">
+            Continuer vers le schéma
+          </button>
+        </div>
       )}
     </div>
   );

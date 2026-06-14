@@ -32,6 +32,9 @@ export default function ProfilePage() {
   const [friendCount, setFriendCount] = useState(0);
   const storyFileRef = useRef(null);
 
+  const [friendshipStatus, setFriendshipStatus] = useState(null);
+  const [friendshipSender, setFriendshipSender] = useState(null);
+
   async function handleLogout() {
     try {
       await fetch("/api/session/logout", { method: "POST" });
@@ -233,6 +236,163 @@ export default function ProfilePage() {
       supabase.removeChannel(channel);
     };
   }, [profile?.uid, firebaseReady]);
+
+  async function fetchFriendship() {
+    if (!fetchedUser?.uid || !profile?.uid || isMyProfile) return;
+    
+    const { data, error } = await supabase
+      .from("friendships")
+      .select("*")
+      .or(`and(user_id_1.eq.${fetchedUser.uid},user_id_2.eq.${profile.uid}),and(user_id_1.eq.${profile.uid},user_id_2.eq.${fetchedUser.uid})`)
+      .maybeSingle();
+      
+    if (!error && data) {
+      setFriendshipStatus(data.status);
+      setFriendshipSender(data.sender_id);
+    } else {
+      setFriendshipStatus(null);
+      setFriendshipSender(null);
+    }
+  }
+
+  useEffect(() => {
+    if (fetchedUser?.uid && profile?.uid && !isMyProfile && firebaseReady) {
+      fetchFriendship();
+      
+      const channel = supabase
+        .channel(`friendships-profile-${profile.uid}`)
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "friendships" },
+          () => {
+            fetchFriendship();
+          }
+        )
+        .subscribe();
+        
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [fetchedUser?.uid, profile?.uid, isMyProfile, firebaseReady]);
+
+  async function sendFriendRequest() {
+    if (!fetchedUser || !profile) return;
+    try {
+      const u1 = fetchedUser.uid < profile.uid ? fetchedUser.uid : profile.uid;
+      const u2 = fetchedUser.uid > profile.uid ? fetchedUser.uid : profile.uid;
+      
+      const { error: friendErr } = await supabase.from("friendships").insert({
+        user_id_1: u1,
+        user_id_2: u2,
+        sender_id: fetchedUser.uid,
+        status: "pending",
+      });
+      if (friendErr) throw friendErr;
+      
+      const { error: notifErr } = await supabase.from("notifications").insert({
+        to_user_id: profile.uid,
+        from_user_id: fetchedUser.uid,
+        from_pseudo: fetchedUser.pseudo || "Quelqu'un",
+        type: "friend",
+        message: "t'a envoyé une demande d'ami direct",
+        read: false,
+      });
+      if (notifErr) throw notifErr;
+      
+      fetchFriendship();
+    } catch (err) {
+      alert("Erreur lors de l'envoi de la demande d'ami : " + err.message);
+    }
+  }
+
+  async function cancelFriendRequest() {
+    if (!fetchedUser || !profile) return;
+    try {
+      const u1 = fetchedUser.uid < profile.uid ? fetchedUser.uid : profile.uid;
+      const u2 = fetchedUser.uid > profile.uid ? fetchedUser.uid : profile.uid;
+      
+      await supabase
+        .from("friendships")
+        .delete()
+        .eq("user_id_1", u1)
+        .eq("user_id_2", u2);
+        
+      await supabase
+        .from("notifications")
+        .delete()
+        .eq("to_user_id", profile.uid)
+        .eq("from_user_id", fetchedUser.uid)
+        .eq("type", "friend");
+        
+      fetchFriendship();
+    } catch (err) {
+      alert("Erreur lors de l'annulation de la demande : " + err.message);
+    }
+  }
+
+  async function acceptFriendRequest() {
+    if (!fetchedUser || !profile) return;
+    try {
+      const u1 = fetchedUser.uid < profile.uid ? fetchedUser.uid : profile.uid;
+      const u2 = fetchedUser.uid > profile.uid ? fetchedUser.uid : profile.uid;
+      
+      await supabase
+        .from("friendships")
+        .update({ status: "accepted" })
+        .eq("user_id_1", u1)
+        .eq("user_id_2", u2);
+        
+      await supabase.from("notifications").insert({
+        to_user_id: profile.uid,
+        from_user_id: fetchedUser.uid,
+        from_pseudo: fetchedUser.pseudo || "Quelqu'un",
+        type: "friend_accept",
+        message: "a accepté ta demande d'ami direct",
+        read: false,
+      });
+      
+      fetchFriendship();
+    } catch (err) {
+      alert("Erreur lors de l'acceptation : " + err.message);
+    }
+  }
+
+  async function declineFriendRequest() {
+    if (!fetchedUser || !profile) return;
+    try {
+      const u1 = fetchedUser.uid < profile.uid ? fetchedUser.uid : profile.uid;
+      const u2 = fetchedUser.uid > profile.uid ? fetchedUser.uid : profile.uid;
+      
+      await supabase
+        .from("friendships")
+        .delete()
+        .eq("user_id_1", u1)
+        .eq("user_id_2", u2);
+        
+      fetchFriendship();
+    } catch (err) {
+      alert("Erreur lors du refus : " + err.message);
+    }
+  }
+
+  async function removeFriend() {
+    if (!confirm("Retirer cette personne de vos amis ?")) return;
+    try {
+      const u1 = fetchedUser.uid < profile.uid ? fetchedUser.uid : profile.uid;
+      const u2 = fetchedUser.uid > profile.uid ? fetchedUser.uid : profile.uid;
+      
+      await supabase
+        .from("friendships")
+        .delete()
+        .eq("user_id_1", u1)
+        .eq("user_id_2", u2);
+        
+      fetchFriendship();
+    } catch (err) {
+      alert("Erreur lors de la suppression de l'ami : " + err.message);
+    }
+  }
 
   // Écoute des posts de l'utilisateur affiché
   async function fetchProfilePosts() {
@@ -480,30 +640,52 @@ export default function ProfilePage() {
                   </button>
                 </>
               ) : (
-                <>
-                  <button
-                    onClick={async () => {
-                      try {
-                        await supabase.from("notifications").insert({
-                          to_user_id: profile.uid,
-                          from_pseudo: fetchedUser?.pseudo || "Quelqu'un",
-                          type: "friend",
-                          message: "t'a envoyé une demande d'ami direct (clique pour discuter)",
-                          read: false,
-                        });
-                      } catch (err) {
-                        console.error(err);
-                      }
-                      router.push(`/messenger?to=${profile.uid}`);
-                    }}
-                    className="btn-primary py-2 px-4 text-xs font-bold rounded-lg cursor-pointer"
-                  >
-                    Ajouter
-                  </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {friendshipStatus === "accepted" && (
+                    <button
+                      onClick={removeFriend}
+                      className="flex items-center gap-1.5 py-2 px-4 bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-800 text-xs font-bold rounded-lg transition-colors border-0 cursor-pointer"
+                    >
+                      Amis ✓
+                    </button>
+                  )}
+                  {friendshipStatus === "pending" && friendshipSender === fetchedUser?.uid && (
+                    <button
+                      onClick={cancelFriendRequest}
+                      className="flex items-center gap-1.5 py-2 px-4 bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-700 text-xs font-bold rounded-lg transition-colors border-0 cursor-pointer"
+                      title="Clique pour annuler l'invitation"
+                    >
+                      Invitation envoyée
+                    </button>
+                  )}
+                  {friendshipStatus === "pending" && friendshipSender !== fetchedUser?.uid && (
+                    <>
+                      <button
+                        onClick={acceptFriendRequest}
+                        className="btn-primary py-2 px-4 text-xs font-bold rounded-lg cursor-pointer"
+                      >
+                        Accepter
+                      </button>
+                      <button
+                        onClick={declineFriendRequest}
+                        className="flex items-center gap-1.5 py-2 px-4 bg-slate-100 hover:bg-red-100 text-slate-800 text-xs font-bold rounded-lg transition-colors border-0 cursor-pointer"
+                      >
+                        Refuser
+                      </button>
+                    </>
+                  )}
+                  {!friendshipStatus && (
+                    <button
+                      onClick={sendFriendRequest}
+                      className="btn-primary py-2 px-4 text-xs font-bold rounded-lg cursor-pointer"
+                    >
+                      Ajouter
+                    </button>
+                  )}
                   <Link href={`/messenger?to=${profile.uid}`} className="flex items-center gap-1.5 py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-lg transition-colors">
                     Message
                   </Link>
-                </>
+                </div>
               )}
             </div>
           </div>

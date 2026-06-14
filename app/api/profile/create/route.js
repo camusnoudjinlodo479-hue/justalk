@@ -4,12 +4,11 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { createSupabaseAdmin } from "@/lib/supabase";
-import { verifySessionToken, SESSION_COOKIE_NAME } from "@/lib/session";
+import { verifySessionToken, SESSION_COOKIE_NAME, createSessionToken, sessionCookieOptions } from "@/lib/session";
 
 export async function POST(req) {
   const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
   const payload = token ? await verifySessionToken(token) : null;
-  if (!payload?.uid) return NextResponse.json({ error: "non authentifié" }, { status: 401 });
 
   const form = await req.formData();
   const pseudo = form.get("pseudo");
@@ -18,6 +17,17 @@ export async function POST(req) {
   const birthdate = form.get("birthdate");
   const pattern = form.get("pattern");
   const avatar = form.get("avatar");
+
+  let uid;
+  let isNewUser = false;
+
+  if (payload?.uid) {
+    uid = payload.uid;
+  } else {
+    // Nouvel utilisateur sans biométrie (onboarding bypassé/sauté sur desktop)
+    uid = crypto.randomUUID();
+    isNewUser = true;
+  }
 
   const dbUpdate = {};
   if (pseudo) dbUpdate.pseudo = pseudo;
@@ -37,7 +47,7 @@ export async function POST(req) {
 
   if (avatar && typeof avatar !== "string") {
     try {
-      const filePath = `avatars/${payload.uid}-${Date.now()}`;
+      const filePath = `avatars/${uid}-${Date.now()}`;
       const buffer = Buffer.from(await avatar.arrayBuffer());
       
       const { error: uploadError } = await supabaseAdmin.storage
@@ -59,17 +69,37 @@ export async function POST(req) {
     }
   }
 
-  const { error: updateError } = await supabaseAdmin
-    .from("users")
-    .update(dbUpdate)
-    .eq("id", payload.uid);
+  const { error: dbError } = isNewUser
+    ? await supabaseAdmin.from("users").insert({
+        id: uid,
+        pseudo: pseudo || `user-${uid.slice(0, 8)}`,
+        first_name: firstName || null,
+        last_name: lastName || null,
+        display_name: dbUpdate.display_name || null,
+        birthdate: birthdate || null,
+        created_at: new Date().toISOString(),
+        pattern_hash: dbUpdate.pattern_hash || null,
+        avatar_url: dbUpdate.avatar_url || null,
+      })
+    : await supabaseAdmin
+        .from("users")
+        .update(dbUpdate)
+        .eq("id", uid);
 
-  if (updateError) {
-    console.error("Erreur lors de la mise à jour du profil :", updateError);
+  if (dbError) {
+    console.error("Erreur lors de l'enregistrement en DB :", dbError);
     return NextResponse.json({ error: "Erreur lors de la mise à jour." }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, ...dbUpdate });
+  const responseBody = { ok: true, uid, ...dbUpdate };
+  const res = NextResponse.json(responseBody);
+
+  if (isNewUser) {
+    const sessionToken = await createSessionToken({ uid, pseudo: pseudo || `user-${uid.slice(0, 8)}` });
+    res.cookies.set(sessionCookieOptions().name, sessionToken, sessionCookieOptions());
+  }
+
+  return res;
 }
 
 export const dynamic = 'force-dynamic';

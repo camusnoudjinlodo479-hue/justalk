@@ -2,10 +2,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
-import { User, Users, MessageCircle, Bookmark, Film, Bell, Image as ImageIcon, LogOut } from "lucide-react";
+import { User, Users, MessageCircle, Bookmark, Film, Bell, Image as ImageIcon, LogOut, BarChart3 } from "lucide-react";
 
 const LINKS = [
   { href: "/profil", label: "Mon profil", icon: User },
+  { href: "/dashboard", label: "Statistiques", icon: BarChart3 },
   { href: "/groupes", label: "Groupes", icon: Users },
   { href: "/messenger", label: "Messenger", icon: MessageCircle },
   { href: "/stories", label: "Stories", icon: Film },
@@ -20,7 +21,7 @@ export default function LeftSidebar({ user }) {
   async function handleLogout() {
     try {
       await fetch("/api/session/logout", { method: "POST" });
-      await auth.signOut();
+      await auth.signOut().catch(() => {});
       router.push("/");
       router.refresh();
     } catch (err) {
