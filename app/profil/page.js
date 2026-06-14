@@ -29,6 +29,7 @@ export default function ProfilePage() {
   const [usersMap, setUsersMap] = useState({});
   const [myLikes, setMyLikes] = useState({});
   const [recentMembers, setRecentMembers] = useState([]);
+  const [friendCount, setFriendCount] = useState(0);
 
   async function handleLogout() {
     try {
@@ -202,6 +203,13 @@ export default function ProfilePage() {
         .filter((u) => u.id !== profile?.uid);
       setRecentMembers(list);
     }
+
+    const { count } = await supabase
+      .from("users")
+      .select("*", { count: "exact", head: true });
+    
+    const totalFriends = count ? Math.max(0, count - 1) : 0;
+    setFriendCount(totalFriends);
   }
 
   useEffect(() => {
@@ -410,7 +418,7 @@ export default function ProfilePage() {
                 {profile?.birthdateVisibility === "public" && profile?.birthdate && (
                   <span className="text-slate-300">·</span>
                 )}
-                <span className="font-semibold text-slate-700">128 amis</span>
+                <span className="font-semibold text-slate-700">{friendCount} {friendCount > 1 ? "amis" : "ami"}</span>
               </div>
             </div>
 
@@ -531,7 +539,7 @@ export default function ProfilePage() {
                     <h3 className="font-display font-bold text-slate-800 text-base">Amis</h3>
                     <button onClick={() => setTab("Amis")} className="text-xs font-semibold text-electric hover:underline border-0 bg-transparent cursor-pointer">Tous les amis</button>
                   </div>
-                  <p className="text-xs text-slate-400 mb-3">128 amis (membres suggérés)</p>
+                  <p className="text-xs text-slate-400 mb-3">{friendCount} {friendCount > 1 ? "amis" : "ami"} (membres suggérés)</p>
                   <div className="grid grid-cols-3 gap-x-2 gap-y-3">
                     {recentMembers.slice(0, 9).map((m) => (
                       <Link key={m.id} href={`/profil?id=${m.id}`} className="flex flex-col items-center group">

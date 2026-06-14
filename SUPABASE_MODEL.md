@@ -234,3 +234,35 @@ create trigger on_like_notify
   after insert on likes
   for each row execute function handle_like_notification();
 ```
+
+## Storage Configuration (Supabase Storage)
+
+To configure the storage bucket `justalk` and allow users (even unauthenticated or with anonymous keys) to upload, update, view, and delete media files, execute the following SQL script in the **SQL Editor** of Supabase:
+
+```sql
+-- 1. Create the bucket 'justalk' if it does not exist
+insert into storage.buckets (id, name, public)
+values ('justalk', 'justalk', true)
+on conflict (id) do nothing;
+
+-- 2. Allow public read access to the 'justalk' bucket
+create policy "Allow public read access"
+on storage.objects for select
+using (bucket_id = 'justalk');
+
+-- 3. Allow public insert (upload) access to the 'justalk' bucket
+create policy "Allow public insert access"
+on storage.objects for insert
+with check (bucket_id = 'justalk');
+
+-- 4. Allow public update access to the 'justalk' bucket
+create policy "Allow public update access"
+on storage.objects for update
+with check (bucket_id = 'justalk');
+
+-- 5. Allow public delete access to the 'justalk' bucket
+create policy "Allow public delete access"
+on storage.objects for delete
+using (bucket_id = 'justalk');
+```
+
