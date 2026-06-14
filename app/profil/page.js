@@ -1,6 +1,6 @@
 "use client";
 // app/profil/page.js
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import EditProfileModal from "@/components/profile/EditProfileModal";
 import { Camera, Cake, Link as LinkIcon } from "lucide-react";
 import Header from "@/components/layout/Header";
@@ -8,6 +8,8 @@ import MobileNav from "@/components/layout/MobileNav";
 import LeftSidebar from "@/components/layout/LeftSidebar";
 import PostCard from "@/components/feed/PostCard";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import { doc, getDoc, collection, query, orderBy, getDocs } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 const TABS = ["Posts", "À propos", "Amis", "Photos"];
 
@@ -16,10 +18,75 @@ export default function ProfilePage() {
   const fetchedUser = useCurrentUser();
   const [tab, setTab] = useState("Posts");
   const [editOpen, setEditOpen] = useState(false);
+  const [targetUid, setTargetUid] = useState(null);
+  const [targetUser, setTargetUser] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
+
+  // Détecte le paramètre de requête 'id' dans l'URL
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setTargetUid(params.get("id"));
+    }
+  }, []);
 
   // synchronise l'état local éditable avec la session récupérée
   if (fetchedUser && !user) setUser(fetchedUser);
-  const profile = user || fetchedUser;
+
+  // Récupère l'utilisateur ciblé s'il y a un paramètre 'id' dans l'URL et qu'il est différent de l'utilisateur connecté
+  useEffect(() => {
+    if (!targetUid) {
+      setTargetUser(null);
+      return;
+    }
+    if (fetchedUser && targetUid === fetchedUser.uid) {
+      setTargetUser(null);
+      return;
+    }
+    
+    let active = true;
+    const userDocRef = doc(db, "users", targetUid);
+    getDoc(userDocRef).then((snap) => {
+      if (active && snap.exists()) {
+        setTargetUser({ uid: snap.id, ...snap.data() });
+      }
+    }).catch((err) => {
+      console.error("Erreur de récupération du profil :", err);
+    });
+    
+    return () => {
+      active = false;
+    };
+  }, [targetUid, fetchedUser]);
+
+  const profile = targetUser || user || fetchedUser;
+  const isMyProfile = !targetUid || (fetchedUser && targetUid === fetchedUser.uid);
+
+  // Récupère les posts de l'utilisateur affiché
+  useEffect(() => {
+    if (!profile?.uid) return;
+    let active = true;
+    setLoadingPosts(true);
+    
+    const postsRef = collection(db, "posts");
+    const q = query(postsRef, orderBy("createdAt", "desc"));
+    
+    getDocs(q).then((snap) => {
+      if (!active) return;
+      const allPosts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const userPosts = allPosts.filter((p) => p.authorId === profile.uid);
+      setPosts(userPosts);
+    }).catch((err) => {
+      console.error("Erreur lors de la récupération des posts du profil :", err);
+    }).finally(() => {
+      if (active) setLoadingPosts(false);
+    });
+    
+    return () => {
+      active = false;
+    };
+  }, [profile?.uid]);
 
   return (
     <div className="min-h-screen pb-16">
@@ -30,7 +97,7 @@ export default function ProfilePage() {
         <div className="relative h-56 sm:h-72 rounded-3xl overflow-hidden shadow-embossed-lg bg-gradient-to-br from-electric to-electric-light">
           {profile?.coverUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.coverUrl} alt="" className="w-full h-full object-cover" />
+            <img src={profile.coverUrl} alt="" className="w-full h-full object-cover" />
           )}
           <button className="absolute bottom-3 right-3 icon-btn bg-white/90">
             <Camera size={16} />
@@ -40,7 +107,7 @@ export default function ProfilePage() {
           <div className="absolute -bottom-12 left-6 w-28 h-28 rounded-full border-4 border-white bg-electric/10 shadow-embossed-lg overflow-hidden flex items-center justify-center font-bold text-3xl text-electric">
             {profile?.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+              <img src={profile.avatarUrl} alt="" className="w-full h-full object-cover" />
             ) : (
               profile?.pseudo?.[0]?.toUpperCase() || "J"
             )}
@@ -62,7 +129,9 @@ export default function ProfilePage() {
               <span className="flex items-center gap-1"><LinkIcon size={12} /> justalk.app/{profile?.pseudo}</span>
             </div>
           </div>
-          <button onClick={() => setEditOpen(true)} className="btn-ghost">Modifier le profil</button>
+          {isMyProfile && (
+            <button onClick={() => setEditOpen(true)} className="btn-ghost">Modifier le profil</button>
+          )}
         </div>
 
         <EditProfileModal
@@ -94,10 +163,24 @@ export default function ProfilePage() {
           <LeftSidebar user={profile} />
           <section className="flex-1 max-w-2xl mx-auto flex flex-col gap-4">
             {tab === "Posts" && (
-              <div className="card-lg p-10 text-center text-slate-400">
-                {profile?.pseudo
-                  ? `${profile.pseudo} n'a encore rien publié.`
-                  : "Aucun post pour le moment."}
+              <div className="flex flex-col gap-4 w-full">
+                {posts.map((post) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+                
+                {posts.length === 0 && !loadingPosts && (
+                  <div className="card-lg p-10 text-center text-slate-400 w-full">
+                    {profile?.pseudo
+                      ? `${profile.pseudo} n'a encore rien publié.`
+                      : "Aucun post pour le moment."}
+                  </div>
+                )}
+                
+                {loadingPosts && (
+                  <div className="text-center py-4 text-electric text-sm w-full">
+                    Chargement des publications…
+                  </div>
+                )}
               </div>
             )}
             {tab === "À propos" && (

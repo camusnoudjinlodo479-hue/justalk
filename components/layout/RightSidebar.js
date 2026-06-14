@@ -1,35 +1,95 @@
+"use client";
 // components/layout/RightSidebar.js
+// Affiche en temps réel la liste des membres inscrits sur Justalk
+// Permet de leur envoyer une invitation à discuter
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { collection, query, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import { MessageSquare, Users } from "lucide-react";
 
-export default function RightSidebar({ contacts = [] }) {
+export default function RightSidebar() {
+  const [members, setMembers] = useState([]);
+  const currentUser = useCurrentUser();
+
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    
+    const q = query(
+      collection(db, "users"),
+      orderBy("createdAt", "desc"),
+      limit(25)
+    );
+
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((u) => u.id !== currentUser.uid);
+        setMembers(list);
+      },
+      (err) => {
+        console.error("Erreur lors de la récupération des membres :", err);
+      }
+    );
+
+    return () => unsub();
+  }, [currentUser?.uid]);
+
+  if (!currentUser) return null;
+
   return (
-    <aside className="hidden xl:flex flex-col gap-1 w-64 shrink-0 sticky top-20 self-start">
-      <h3 className="text-slate-400 font-semibold text-xs uppercase tracking-wide px-3 mb-1">
-        Contacts
-      </h3>
-      {contacts.length === 0 && (
-        <p className="px-3 text-sm text-slate-400">Aucun ami en ligne pour le moment.</p>
+    <aside className="hidden xl:flex flex-col gap-3 w-64 shrink-0 sticky top-20 self-start">
+      <div className="flex items-center gap-1.5 px-3 mb-1">
+        <Users className="text-electric" size={16} />
+        <h3 className="text-slate-500 font-bold text-xs uppercase tracking-wide">
+          Membres récents
+        </h3>
+      </div>
+      
+      {members.length === 0 && (
+        <p className="px-3 text-sm text-slate-400">Aucun autre membre inscrit.</p>
       )}
-      {contacts.map((c) => (
-        <Link
-          key={c.id}
-          href={`/messenger?to=${c.id}`}
-          className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white hover:shadow-embossed transition-all"
-        >
-          <div className="relative w-9 h-9 rounded-full bg-electric/10 flex items-center justify-center font-bold text-electric text-sm overflow-hidden">
-            {c.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={c.avatarUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              c.pseudo?.[0]?.toUpperCase()
-            )}
-            {c.online && (
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-white" />
-            )}
-          </div>
-          <span className="text-sm font-medium text-slate-700">{c.pseudo}</span>
-        </Link>
-      ))}
+
+      <div className="flex flex-col gap-1 max-h-[calc(100vh-12rem)] overflow-y-auto pr-1">
+        {members.map((m) => (
+          <Link
+            key={m.id}
+            href={`/messenger?to=${m.id}`}
+            className="group flex items-center justify-between p-2 rounded-2xl hover:bg-white hover:shadow-embossed border border-transparent hover:border-white/60 transition-all duration-300"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              {/* Avatar avec témoin en ligne */}
+              <div className="relative w-10 h-10 rounded-full bg-electric/10 flex items-center justify-center font-bold text-electric text-sm shrink-0 overflow-hidden shadow-sm">
+                {m.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  m.pseudo?.[0]?.toUpperCase() || "U"
+                )}
+                {m.online && (
+                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white" />
+                )}
+              </div>
+
+              <div className="flex flex-col min-w-0 leading-tight">
+                <span className="text-sm font-semibold text-slate-700 truncate group-hover:text-electric transition-colors">
+                  {m.displayName || m.pseudo}
+                </span>
+                <span className="text-xs text-slate-400 truncate">@{m.pseudo}</span>
+              </div>
+            </div>
+
+            {/* Bouton d'action Inviter / Discuter */}
+            <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-electric/10 flex items-center justify-center text-slate-400 group-hover:text-electric transition-all duration-300 shadow-sm shrink-0">
+              <MessageSquare size={14} />
+            </div>
+          </Link>
+        ))}
+      </div>
     </aside>
   );
 }
+

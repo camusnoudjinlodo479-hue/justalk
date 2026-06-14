@@ -35,13 +35,17 @@ export async function POST(req) {
   }
 
   if (avatar && typeof avatar !== "string") {
-    const bucket = adminStorage.bucket();
-    const filePath = `avatars/${payload.uid}-${Date.now()}`;
-    const buffer = Buffer.from(await avatar.arrayBuffer());
-    const file = bucket.file(filePath);
-    await file.save(buffer, { contentType: avatar.type });
-    await file.makePublic();
-    update.avatarUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+    try {
+      const bucket = adminStorage.bucket();
+      const filePath = `avatars/${payload.uid}-${Date.now()}`;
+      const buffer = Buffer.from(await avatar.arrayBuffer());
+      const file = bucket.file(filePath);
+      await file.save(buffer, { contentType: avatar.type });
+      await file.makePublic();
+      update.avatarUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+    } catch (storageError) {
+      console.error("Erreur critique Firebase Storage lors de la création de l'avatar (on continue sans avatar) :", storageError);
+    }
   }
 
   await adminDb.collection("users").doc(payload.uid).update(update);

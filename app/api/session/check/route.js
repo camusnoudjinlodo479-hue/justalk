@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebaseAdmin";
+import { adminDb, adminAuth } from "@/lib/firebaseAdmin";
 import { verifySessionToken, SESSION_COOKIE_NAME } from "@/lib/session";
 
 export async function GET(req) {
@@ -18,11 +18,15 @@ export async function GET(req) {
       return NextResponse.json({ error: "Utilisateur non trouvé" }, { status: 404 });
     }
     
+    // Génère un custom token Firebase Auth pour authentifier le client-side SDK
+    const firebaseToken = await adminAuth.createCustomToken(payload.uid);
+    
     return NextResponse.json({
       user: {
         uid: payload.uid,
         ...userDoc.data(),
       },
+      firebaseToken,
     });
   } catch (error) {
     console.error("Erreur lors de la vérification de session :", error);

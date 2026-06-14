@@ -25,7 +25,7 @@ export default function OnboardingPage() {
   }
 
   async function finish({ pseudo, firstName, lastName, birthdate, avatarFile }) {
-    // 1. Upload éventuel de la photo vers Firebase Storage
+    // 1. Upload de la photo vers Firebase Storage
     // 2. Création du document Firestore /users/{uid}
     // 3. Le cookie JWT httpOnly a déjà été posé par /api/webauthn/register-verify
     try {
@@ -37,11 +37,15 @@ export default function OnboardingPage() {
       fd.append("pattern", JSON.stringify(data.pattern || null));
       if (avatarFile) fd.append("avatar", avatarFile);
 
-      await fetch("/api/profile/create", { method: "POST", body: fd });
+      const res = await fetch("/api/profile/create", { method: "POST", body: fd });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Erreur de configuration serveur.");
+      }
       router.push("/feed");
     } catch (e) {
-      console.error(e);
-      router.push("/feed");
+      console.error("Erreur lors de l'onboarding :", e);
+      alert("Impossible de finaliser l'inscription : " + e.message);
     }
   }
 

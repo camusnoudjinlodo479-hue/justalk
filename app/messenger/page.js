@@ -2,7 +2,7 @@
 // app/messenger/page.js
 // Messenger : sidebar de conversations + fenêtre de chat temps réel (Firestore onSnapshot).
 import { useEffect, useState } from "react";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Header from "@/components/layout/Header";
 import MobileNav from "@/components/layout/MobileNav";
@@ -19,9 +19,20 @@ export default function MessengerPage() {
   const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [call, setCall] = useState(null); // { peer, mode, callId }
+  const [toUid, setToUid] = useState(null);
 
   const incomingCall = useIncomingCall(user?.uid);
 
+  // Parse le paramètre de requête 'to' dans l'URL
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const to = params.get("to");
+      if (to) setToUid(to);
+    }
+  }, []);
+
+  // Écoute les conversations en temps réel
   useEffect(() => {
     if (!user?.uid) return;
     const q = query(collection(db, "conversations"), where("members", "array-contains", user.uid));
@@ -39,10 +50,70 @@ export default function MessengerPage() {
         };
       });
       setConversations(list);
-      if (!activeId && list[0]) setActiveId(list[0].id);
+      
+      // N'auto-sélectionne la première conversation que s'il n'y a pas de paramètre "to" dans l'URL
+      const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+      const hasToParam = params?.has("to");
+      if (!activeId && !hasToParam && list[0]) {
+        setActiveId(list[0].id);
+      }
     });
     return () => unsub();
   }, [user?.uid, activeId]);
+
+  // Gère la création/sélection automatique si redirection via 'to=UID'
+  useEffect(() => {
+    if (!user?.uid || !toUid) return;
+
+    // Identifiant unique prédictif pour la conversation entre les deux membres
+    const convId = user.uid < toUid ? `${user.uid}_${toUid}` : `${toUid}_${user.uid}`;
+
+    async function initConversation() {
+      try {
+        const convRef = doc(db, "conversations", convId);
+        const convSnap = await getDoc(convRef);
+
+        if (!convSnap.exists()) {
+          // Récupère les informations publiques du destinataire
+          const targetSnap = await getDoc(doc(db, "users", toUid));
+          if (!targetSnap.exists()) return;
+          const targetData = targetSnap.data();
+
+          // Crée la conversation dans Firestore
+          await setDoc(convRef, {
+            members: [user.uid, toUid],
+            memberProfiles: [
+              {
+                uid: user.uid,
+                pseudo: user.pseudo || "Utilisateur",
+                avatarUrl: user.avatarUrl || null,
+                online: true,
+              },
+              {
+                uid: toUid,
+                pseudo: targetData.pseudo || "Utilisateur",
+                avatarUrl: targetData.avatarUrl || null,
+                online: targetData.online || false,
+              },
+            ],
+            lastMessage: "Dis bonjour 👋",
+            unread: {
+              [user.uid]: 0,
+              [toUid]: 0,
+            },
+            updatedAt: serverTimestamp(),
+          });
+        }
+
+        setActiveId(convId);
+      } catch (err) {
+        console.error("Erreur lors de l'initialisation de la conversation :", err);
+      }
+    }
+
+    initConversation();
+  }, [user, toUid]);
+
 
   const active = conversations.find((c) => c.id === activeId) || null;
 

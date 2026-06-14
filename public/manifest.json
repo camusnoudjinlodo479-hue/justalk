@@ -2,7 +2,7 @@
   "name": "Justalk",
   "short_name": "Justalk",
   "description": "Just you. Justalk. — le réseau social 100% biométrique.",
-  "start_url": "/feed",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

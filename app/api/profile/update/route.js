@@ -31,26 +31,34 @@ export async function POST(req) {
   const birthdateVisibility = form.get("birthdateVisibility");
   if (birthdateVisibility) update.birthdateVisibility = birthdateVisibility;
 
-  const bucket = adminStorage.bucket();
-
   const avatar = form.get("avatar");
   if (avatar && typeof avatar !== "string") {
-    const filePath = `avatars/${payload.uid}-${Date.now()}`;
-    const buffer = Buffer.from(await avatar.arrayBuffer());
-    const file = bucket.file(filePath);
-    await file.save(buffer, { contentType: avatar.type });
-    await file.makePublic();
-    update.avatarUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+    try {
+      const bucket = adminStorage.bucket();
+      const filePath = `avatars/${payload.uid}-${Date.now()}`;
+      const buffer = Buffer.from(await avatar.arrayBuffer());
+      const file = bucket.file(filePath);
+      await file.save(buffer, { contentType: avatar.type });
+      await file.makePublic();
+      update.avatarUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+    } catch (storageError) {
+      console.error("Erreur critique Firebase Storage lors de la mise à jour de l'avatar (on continue sans avatar) :", storageError);
+    }
   }
 
   const cover = form.get("cover");
   if (cover && typeof cover !== "string") {
-    const filePath = `covers/${payload.uid}-${Date.now()}`;
-    const buffer = Buffer.from(await cover.arrayBuffer());
-    const file = bucket.file(filePath);
-    await file.save(buffer, { contentType: cover.type });
-    await file.makePublic();
-    update.coverUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+    try {
+      const bucket = adminStorage.bucket();
+      const filePath = `covers/${payload.uid}-${Date.now()}`;
+      const buffer = Buffer.from(await cover.arrayBuffer());
+      const file = bucket.file(filePath);
+      await file.save(buffer, { contentType: cover.type });
+      await file.makePublic();
+      update.coverUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+    } catch (storageError) {
+      console.error("Erreur critique Firebase Storage lors de la mise à jour de la couverture (on continue sans couverture) :", storageError);
+    }
   }
 
   if (Object.keys(update).length === 0) {

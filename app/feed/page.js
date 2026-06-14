@@ -76,6 +76,7 @@ export default function FeedPage() {
     const optimistic = {
       id: `tmp-${Date.now()}`,
       text,
+      authorId: user.uid,
       author: { pseudo: user.pseudo, avatarUrl: user.avatarUrl },
       likes: 0,
       commentsCount: 0,
@@ -127,7 +128,7 @@ export default function FeedPage() {
           </div>
         </section>
 
-        <RightSidebar contacts={[]} />
+        <RightSidebar />
       </main>
     </div>
   );

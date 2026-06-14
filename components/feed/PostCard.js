@@ -1,6 +1,7 @@
 "use client";
 // components/feed/PostCard.js
 import { useState } from "react";
+import Link from "next/link";
 import { Heart, MessageCircle, Share2, MoreHorizontal } from "lucide-react";
 
 export default function PostCard({ post, onLike, onComment, onShare }) {
@@ -23,20 +24,24 @@ export default function PostCard({ post, onLike, onComment, onShare }) {
     setCommentText("");
   }
 
+  const profileLink = post.authorId ? `/profil?id=${post.authorId}` : "#";
+
   return (
     <article className="card-lg p-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="w-11 h-11 rounded-full bg-electric/10 flex items-center justify-center font-bold text-electric overflow-hidden shrink-0">
+        <Link href={profileLink} className="w-11 h-11 rounded-full bg-electric/10 flex items-center justify-center font-bold text-electric overflow-hidden shrink-0 hover:opacity-85 transition-opacity">
           {post.author?.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={post.author.avatarUrl} alt="" className="w-full h-full object-cover" />
           ) : (
             post.author?.pseudo?.[0]?.toUpperCase()
           )}
-        </div>
+        </Link>
         <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm text-slate-800 truncate">{post.author?.pseudo}</p>
+          <Link href={profileLink} className="font-semibold text-sm text-slate-800 hover:text-electric transition-colors truncate block">
+            {post.author?.pseudo}
+          </Link>
           <p className="text-xs text-slate-400">{post.createdAtLabel || "À l'instant"}</p>
         </div>
         <button className="icon-btn w-9 h-9">
