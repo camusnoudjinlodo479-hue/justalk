@@ -12,11 +12,11 @@ import { Heart, MessageCircle, UserPlus, Bell } from "lucide-react";
 const ICONS = { like: Heart, comment: MessageCircle, friend: UserPlus };
 
 export default function NotificationsPage() {
-  const user = useCurrentUser();
+  const { user, firebaseReady } = useCurrentUser();
   const [notifs, setNotifs] = useState([]);
 
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || !firebaseReady) return;
     const q = query(
       collection(db, "notifications"),
       where("toUserId", "==", user.uid),
@@ -26,7 +26,7 @@ export default function NotificationsPage() {
       setNotifs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     });
     return () => unsub();
-  }, [user?.uid]);
+  }, [user?.uid, firebaseReady]);
 
   return (
     <div className="min-h-screen pb-16">

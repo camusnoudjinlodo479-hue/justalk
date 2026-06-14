@@ -1,13 +1,34 @@
 "use client";
 // components/feed/StoryBar.js
 // Barre de stories horizontale en haut du feed, vignettes au format 9:16.
+import { useRef } from "react";
+import Link from "next/link";
 import { Plus } from "lucide-react";
 
-export default function StoryBar({ user, stories = [] }) {
+export default function StoryBar({ user, stories = [], onPublishStory }) {
+  const fileInputRef = useRef(null);
+
+  function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    if (file && onPublishStory) {
+      onPublishStory(file);
+    }
+  }
+
   return (
     <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none">
       {/* Créer une story */}
-      <div className="relative shrink-0 w-28 h-44 rounded-2xl overflow-hidden card-lg cursor-pointer group">
+      <div
+        onClick={() => fileInputRef.current?.click()}
+        className="relative shrink-0 w-28 h-44 rounded-2xl overflow-hidden card-lg cursor-pointer group"
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-slate-100 to-slate-200" />
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 w-9 h-9 rounded-full bg-electric text-white flex items-center justify-center shadow-glow group-hover:scale-110 transition-transform">
           <Plus size={20} />
@@ -18,8 +39,9 @@ export default function StoryBar({ user, stories = [] }) {
       </div>
 
       {stories.map((s) => (
-        <div
+        <Link
           key={s.id}
+          href={`/stories?id=${s.id}`}
           className="relative shrink-0 w-28 h-44 rounded-2xl overflow-hidden card-lg cursor-pointer group"
         >
           {s.mediaUrl ? (
@@ -42,7 +64,7 @@ export default function StoryBar({ user, stories = [] }) {
           <p className="absolute bottom-2 left-2 right-2 text-xs font-semibold text-white truncate">
             {s.pseudo}
           </p>
-        </div>
+        </Link>
       ))}
     </div>
   );

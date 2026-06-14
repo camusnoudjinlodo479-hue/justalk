@@ -1,27 +1,61 @@
 "use client";
 // components/feed/PostCard.js
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Heart, MessageCircle, Share2, MoreHorizontal } from "lucide-react";
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 
-export default function PostCard({ post, onLike, onComment, onShare }) {
-  const [liked, setLiked] = useState(post.likedByMe || false);
-  const [likeCount, setLikeCount] = useState(post.likes || 0);
+export default function PostCard({ post, onLike, onShare }) {
+  const { user: currentUser } = useCurrentUser();
   const [commentText, setCommentText] = useState("");
   const [showComments, setShowComments] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [loadingComments, setLoadingComments] = useState(false);
+
+  const liked = post.likedByMe || false;
+  const likeCount = post.likes || 0;
+
+  useEffect(() => {
+    if (!post.id || !showComments) return;
+    setLoadingComments(true);
+    const q = query(
+      collection(db, "posts", post.id, "comments"),
+      orderBy("createdAt", "asc")
+    );
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setComments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setLoadingComments(false);
+      },
+      (err) => {
+        console.error("Erreur de récupération des commentaires :", err);
+        setLoadingComments(false);
+      }
+    );
+    return () => unsub();
+  }, [post.id, showComments]);
 
   function toggleLike() {
-    const next = !liked;
-    setLiked(next);
-    setLikeCount((c) => c + (next ? 1 : -1));
-    onLike?.(post.id, next);
+    onLike?.(post.id, !liked);
   }
 
-  function submitComment(e) {
+  async function submitComment(e) {
     e.preventDefault();
-    if (!commentText.trim()) return;
-    onComment?.(post.id, commentText.trim());
-    setCommentText("");
+    if (!commentText.trim() || !currentUser) return;
+    try {
+      await addDoc(collection(db, "posts", post.id, "comments"), {
+        authorId: currentUser.uid,
+        author: currentUser.displayName || currentUser.pseudo,
+        text: commentText.trim(),
+        createdAt: serverTimestamp(),
+      });
+      setCommentText("");
+    } catch (err) {
+      console.error("Erreur lors de la publication du commentaire :", err);
+    }
   }
 
   const profileLink = post.authorId ? `/profil?id=${post.authorId}` : "#";
@@ -88,8 +122,9 @@ export default function PostCard({ post, onLike, onComment, onShare }) {
       {/* Comments */}
       {showComments && (
         <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
-          {(post.comments || []).map((c) => (
-            <div key={c.id} className="flex gap-2 text-sm">
+          {loadingComments && <p className="text-xs text-slate-400">Chargement des commentaires…</p>}
+          {comments.map((c) => (
+            <div key={c.id} className="flex gap-2 text-sm leading-relaxed">
               <span className="font-semibold text-slate-700">{c.author}</span>
               <span className="text-slate-600">{c.text}</span>
             </div>

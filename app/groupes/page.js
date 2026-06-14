@@ -1,7 +1,7 @@
 "use client";
 // app/groupes/page.js
-import { useState } from "react";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { useState, useEffect } from "react";
+import { collection, addDoc, serverTimestamp, query, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import Header from "@/components/layout/Header";
 import MobileNav from "@/components/layout/MobileNav";
@@ -10,23 +10,37 @@ import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Plus, Users, Shield } from "lucide-react";
 
 export default function GroupesPage() {
-  const user = useCurrentUser();
+  const { user, firebaseReady } = useCurrentUser();
   const [groups, setGroups] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
+  // Charge les groupes en temps réel
+  useEffect(() => {
+    if (!user?.uid || !firebaseReady) return;
+    const q = query(collection(db, "groups"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      setGroups(snap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        membersCount: d.data().members?.length || 1
+      })));
+    });
+    return () => unsub();
+  }, [user?.uid, firebaseReady]);
+
   async function createGroup(e) {
     e.preventDefault();
     if (!name.trim() || !user) return;
+    const tempId = `tmp-${Date.now()}`;
     const newGroup = {
-      id: `tmp-${Date.now()}`,
+      id: tempId,
       name: name.trim(),
       description,
       membersCount: 1,
       ownerId: user.uid,
     };
-    setGroups((prev) => [newGroup, ...prev]);
     setName("");
     setDescription("");
     setShowForm(false);

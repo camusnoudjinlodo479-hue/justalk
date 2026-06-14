@@ -2,29 +2,48 @@
 // app/profil/page.js
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase";
+import Link from "next/link";
+import { auth, db, storage } from "@/lib/firebase";
 import EditProfileModal from "@/components/profile/EditProfileModal";
-import { Camera, Cake, Link as LinkIcon } from "lucide-react";
+import { Camera, Cake, Link as LinkIcon, Plus } from "lucide-react";
 import Header from "@/components/layout/Header";
 import MobileNav from "@/components/layout/MobileNav";
-import LeftSidebar from "@/components/layout/LeftSidebar";
 import PostCard from "@/components/feed/PostCard";
+import CreatePost from "@/components/feed/CreatePost";
 import { useCurrentUser } from "@/lib/useCurrentUser";
-import { doc, getDoc, collection, query, orderBy, getDocs } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import {
+  doc,
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  addDoc,
+  serverTimestamp,
+  setDoc,
+  deleteDoc,
+  updateDoc,
+  increment,
+  where,
+  limit,
+} from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
-const TABS = ["Posts", "À propos", "Amis", "Photos"];
+const TABS = ["Publications", "À propos", "Amis", "Photos"];
 
 export default function ProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const fetchedUser = useCurrentUser();
-  const [tab, setTab] = useState("Posts");
+  const { user: fetchedUser, firebaseReady } = useCurrentUser();
+  const [tab, setTab] = useState("Publications");
   const [editOpen, setEditOpen] = useState(false);
   const [targetUid, setTargetUid] = useState(null);
   const [targetUser, setTargetUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
+
+  const [usersMap, setUsersMap] = useState({});
+  const [myLikes, setMyLikes] = useState({});
+  const [recentMembers, setRecentMembers] = useState([]);
 
   async function handleLogout() {
     try {
@@ -48,100 +67,284 @@ export default function ProfilePage() {
   // synchronise l'état local éditable avec la session récupérée
   if (fetchedUser && !user) setUser(fetchedUser);
 
-  // Récupère l'utilisateur ciblé s'il y a un paramètre 'id' dans l'URL et qu'il est différent de l'utilisateur connecté
-  useEffect(() => {
-    if (!targetUid) {
-      setTargetUser(null);
-      return;
-    }
-    if (fetchedUser && targetUid === fetchedUser.uid) {
-      setTargetUser(null);
-      return;
-    }
-    
-    let active = true;
-    const userDocRef = doc(db, "users", targetUid);
-    getDoc(userDocRef).then((snap) => {
-      if (active && snap.exists()) {
-        setTargetUser({ uid: snap.id, ...snap.data() });
-      }
-    }).catch((err) => {
-      console.error("Erreur de récupération du profil :", err);
-    });
-    
-    return () => {
-      active = false;
-    };
-  }, [targetUid, fetchedUser]);
-
   const profile = targetUser || user || fetchedUser;
   const isMyProfile = !targetUid || (fetchedUser && targetUid === fetchedUser.uid);
 
-  // Récupère les posts de l'utilisateur affiché
+  // Écoute de l'utilisateur affiché en temps réel
   useEffect(() => {
-    if (!profile?.uid) return;
-    let active = true;
+    if (!profile?.uid || !firebaseReady) return;
+    const unsub = onSnapshot(doc(db, "users", profile.uid), (snap) => {
+      if (snap.exists()) {
+        const data = { uid: snap.id, ...snap.data() };
+        if (isMyProfile) {
+          setUser(data);
+        } else {
+          setTargetUser(data);
+        }
+      }
+    });
+    return () => unsub();
+  }, [profile?.uid, isMyProfile, firebaseReady]);
+
+  // Écoute des utilisateurs en temps réel (pour pseudos/avatars)
+  useEffect(() => {
+    if (!firebaseReady) return;
+    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+      const map = {};
+      snap.docs.forEach((d) => {
+        map[d.id] = d.data();
+      });
+      setUsersMap(map);
+    });
+    return () => unsub();
+  }, [firebaseReady]);
+
+  // Écoute des likes en temps réel
+  useEffect(() => {
+    if (!fetchedUser?.uid || !firebaseReady) return;
+    const q = query(collection(db, "likes"), where("userId", "==", fetchedUser.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      const likesMap = {};
+      snap.docs.forEach((d) => {
+        likesMap[d.data().postId] = true;
+      });
+      setMyLikes(likesMap);
+    });
+    return () => unsub();
+  }, [fetchedUser?.uid, firebaseReady]);
+
+  // Écoute des membres récents pour la box Amis
+  useEffect(() => {
+    if (!firebaseReady) return;
+    const q = query(collection(db, "users"), orderBy("createdAt", "desc"), limit(12));
+    const unsub = onSnapshot(q, (snap) => {
+      const list = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((u) => u.id !== profile?.uid);
+      setRecentMembers(list);
+    });
+    return () => unsub();
+  }, [profile?.uid, firebaseReady]);
+
+  // Écoute des posts de l'utilisateur affiché en temps réel
+  useEffect(() => {
+    if (!profile?.uid || !firebaseReady) return;
     setLoadingPosts(true);
     
     const postsRef = collection(db, "posts");
     const q = query(postsRef, orderBy("createdAt", "desc"));
     
-    getDocs(q).then((snap) => {
-      if (!active) return;
+    const unsub = onSnapshot(q, (snap) => {
       const allPosts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       const userPosts = allPosts.filter((p) => p.authorId === profile.uid);
       setPosts(userPosts);
-    }).catch((err) => {
-      console.error("Erreur lors de la récupération des posts du profil :", err);
-    }).finally(() => {
-      if (active) setLoadingPosts(false);
+      setLoadingPosts(false);
+    }, (err) => {
+      console.error("Erreur lors de la récupération des posts :", err);
+      setLoadingPosts(false);
     });
     
-    return () => {
-      active = false;
+    return () => unsub();
+  }, [profile?.uid, firebaseReady]);
+
+  async function handleLike(postId, isLiked) {
+    if (!fetchedUser) return;
+    const likeId = `${fetchedUser.uid}_${postId}`;
+    const likeRef = doc(db, "likes", likeId);
+    const postRef = doc(db, "posts", postId);
+    try {
+      if (isLiked) {
+        await setDoc(likeRef, { userId: fetchedUser.uid, postId, createdAt: serverTimestamp() });
+        await updateDoc(postRef, { likes: increment(1) });
+      } else {
+        await deleteDoc(likeRef);
+        await updateDoc(postRef, { likes: increment(-1) });
+      }
+    } catch (err) {
+      console.error("Erreur like toggle:", err);
+    }
+  }
+
+  async function handlePublish({ text, mediaFile }) {
+    if (!fetchedUser) return;
+    
+    const tempUrl = mediaFile ? URL.createObjectURL(mediaFile) : null;
+    const isVideo = mediaFile?.type?.startsWith("video/");
+
+    const optimistic = {
+      id: `tmp-${Date.now()}`,
+      text,
+      authorId: fetchedUser.uid,
+      author: { pseudo: fetchedUser.pseudo, avatarUrl: fetchedUser.avatarUrl },
+      likes: 0,
+      commentsCount: 0,
+      shares: 0,
+      createdAtLabel: "À l'instant",
+      imageUrl: mediaFile && !isVideo ? tempUrl : null,
+      videoUrl: mediaFile && isVideo ? tempUrl : null,
     };
-  }, [profile?.uid]);
+
+    setPosts((prev) => [optimistic, ...prev]);
+
+    try {
+      let mediaUrl = null;
+      let mediaType = null;
+
+      if (mediaFile) {
+        try {
+          const fileRef = ref(storage, `posts/${fetchedUser.uid}/${Date.now()}_${mediaFile.name}`);
+          const uploadResult = await uploadBytes(fileRef, mediaFile);
+          mediaUrl = await getDownloadURL(uploadResult.ref);
+          mediaType = isVideo ? "video" : "image";
+        } catch (storageErr) {
+          console.error("Erreur d'upload Storage :", storageErr);
+          alert("L'upload a échoué. Publication sans média.");
+        }
+      }
+
+      await addDoc(collection(db, "posts"), {
+        text,
+        authorId: fetchedUser.uid,
+        author: { pseudo: fetchedUser.pseudo, avatarUrl: fetchedUser.avatarUrl || null },
+        imageUrl: mediaType === "image" ? mediaUrl : null,
+        videoUrl: mediaType === "video" ? mediaUrl : null,
+        likes: 0,
+        commentsCount: 0,
+        shares: 0,
+        createdAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.error("Erreur publication:", e);
+    }
+  }
+
+  const photos = posts.map((p) => p.imageUrl).filter((url) => !!url);
 
   return (
-    <div className="min-h-screen pb-16">
-      <Header user={profile} />
+    <div className="min-h-screen pb-16 bg-bg">
+      <Header user={fetchedUser} />
       <MobileNav />
-      <main className="max-w-5xl mx-auto pt-20 px-3">
-        {/* Cover */}
-        <div className="relative h-56 sm:h-72 rounded-3xl overflow-hidden shadow-embossed-lg bg-gradient-to-br from-electric to-electric-light">
-          {profile?.coverUrl && (
+      
+      <main className="max-w-5xl mx-auto pt-16">
+        {/* Cover Photo */}
+        <div className="relative w-full h-48 sm:h-64 md:h-80 bg-slate-200 rounded-b-3xl overflow-hidden shadow-embossed-lg">
+          {profile?.coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={profile.coverUrl} alt="" className="w-full h-full object-cover" />
+            <img src={profile.coverUrl} alt="Couverture" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-blue-600 via-indigo-600 to-indigo-500" />
           )}
-          <button className="absolute bottom-3 right-3 icon-btn bg-white/90">
-            <Camera size={16} />
-          </button>
-
-          {/* Avatar overlapping */}
-          <div className="absolute -bottom-12 left-6 w-28 h-28 rounded-full border-4 border-white bg-electric/10 shadow-embossed-lg overflow-hidden flex items-center justify-center font-bold text-3xl text-electric">
-            {profile?.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={profile.avatarUrl} alt="" className="w-full h-full object-cover" />
-            ) : (
-              profile?.pseudo?.[0]?.toUpperCase() || "J"
-            )}
-          </div>
+          {isMyProfile && (
+            <button
+              onClick={() => setEditOpen(true)}
+              className="absolute bottom-4 right-4 flex items-center gap-2 px-3 py-2 bg-black/60 hover:bg-black/80 text-white rounded-lg text-xs font-semibold backdrop-blur-sm transition-colors border-0 cursor-pointer"
+            >
+              <Camera size={14} /> Modifier la couverture
+            </button>
+          )}
         </div>
 
-        {/* Identity */}
-        <div className="mt-16 px-2 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-          <div>
-            <h1 className="font-display text-2xl font-bold text-slate-800">
-              {profile?.displayName || profile?.pseudo || "@toi"}
-            </h1>
-            <p className="text-slate-400 text-sm">@{profile?.pseudo}</p>
-            <p className="text-slate-500 text-sm mt-1">{profile?.bio || "Aucune bio pour le moment."}</p>
-            <div className="flex flex-wrap gap-3 mt-2 text-xs text-slate-400">
-              {profile?.birthdateVisibility === "public" && profile?.birthdate && (
-                <span className="flex items-center gap-1"><Cake size={12} /> {new Date(profile.birthdate).toLocaleDateString("fr-FR")}</span>
+        {/* Profile Info Header overlapping */}
+        <div className="px-4 md:px-8 pb-4 border-b border-slate-200">
+          <div className="flex flex-col md:flex-row items-center md:items-end gap-5 -mt-16 md:-mt-8 w-full">
+            {/* Overlapping Rounded Avatar */}
+            <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full border-4 border-white bg-slate-100 shadow-md overflow-hidden flex items-center justify-center font-bold text-5xl text-electric shrink-0 z-10">
+              {profile?.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                profile?.pseudo?.[0]?.toUpperCase() || "J"
               )}
-              <span className="flex items-center gap-1"><LinkIcon size={12} /> justalk.app/{profile?.pseudo}</span>
+              {isMyProfile && (
+                <div
+                  onClick={() => setEditOpen(true)}
+                  className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer"
+                >
+                  <Camera size={22} className="text-white" />
+                </div>
+              )}
             </div>
+
+            {/* User details */}
+            <div className="flex-1 text-center md:text-left md:mb-2 min-w-0">
+              <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight">
+                {profile?.displayName || profile?.pseudo || "Utilisateur"}
+              </h1>
+              <p className="text-slate-500 text-xs sm:text-sm font-medium">@{profile?.pseudo}</p>
+              <p className="text-slate-600 text-sm mt-1 max-w-md mx-auto md:mx-0 font-normal">
+                {profile?.bio || "Aucune bio pour le moment."}
+              </p>
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-2 text-xs text-slate-500">
+                {profile?.birthdateVisibility === "public" && profile?.birthdate && (
+                  <span className="flex items-center gap-1"><Cake size={13} className="text-slate-400" /> Anniversaire : {new Date(profile.birthdate).toLocaleDateString("fr-FR")}</span>
+                )}
+                {profile?.birthdateVisibility === "public" && profile?.birthdate && (
+                  <span className="text-slate-300">·</span>
+                )}
+                <span className="font-semibold text-slate-700">128 amis</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center justify-center gap-2.5 shrink-0 md:mb-2 w-full md:w-auto">
+              {isMyProfile ? (
+                <>
+                  <button onClick={() => setEditOpen(true)} className="btn-primary flex items-center gap-1.5 py-2 px-4 text-xs font-bold rounded-lg shadow-sm border-0 cursor-pointer">
+                    <Plus size={14} /> Ajouter à la story
+                  </button>
+                  <button onClick={() => setEditOpen(true)} className="flex items-center gap-1.5 py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-lg transition-colors border-0 cursor-pointer">
+                    Modifier le profil
+                  </button>
+                  <button onClick={handleLogout} className="flex items-center gap-1.5 py-2 px-4 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-lg transition-colors border border-red-100 cursor-pointer">
+                    Se déconnecter
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={async () => {
+                      try {
+                        await addDoc(collection(db, "notifications"), {
+                          toUserId: profile.uid,
+                          fromPseudo: fetchedUser?.pseudo || "Quelqu'un",
+                          type: "friend",
+                          message: "t'a envoyé une demande d'ami direct (clique pour discuter)",
+                          postId: null,
+                          read: false,
+                          createdAt: serverTimestamp(),
+                        });
+                      } catch (err) {
+                        console.error(err);
+                      }
+                      router.push(`/messenger?to=${profile.uid}`);
+                    }}
+                    className="btn-primary py-2 px-4 text-xs font-bold rounded-lg cursor-pointer"
+                  >
+                    Ajouter
+                  </button>
+                  <Link href={`/messenger?to=${profile.uid}`} className="flex items-center gap-1.5 py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-lg transition-colors">
+                    Message
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Facebook-style Tabs */}
+          <div className="mt-4 flex gap-1 border-b border-slate-200 w-full overflow-x-auto scrollbar-none">
+            {TABS.map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-4 py-3 text-sm font-semibold transition-all duration-200 border-b-4 shrink-0 cursor-pointer ${
+                  tab === t
+                    ? "text-electric border-electric"
+                    : "text-slate-500 hover:text-slate-800 hover:bg-slate-50 border-transparent"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -152,68 +355,181 @@ export default function ProfilePage() {
           onSaved={(data) => setUser((prev) => ({ ...prev, ...data }))}
         />
 
-        {/* Tabs */}
-        <div className="mt-6 flex gap-2 border-b border-slate-200">
-          {TABS.map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-4 py-2 text-sm font-semibold rounded-t-xl transition-colors ${
-                tab === t
-                  ? "text-electric border-b-2 border-electric"
-                  : "text-slate-500 hover:text-electric"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
+        {/* Main Grid Content Area */}
+        <div className="mt-4 px-3">
+          {tab === "Publications" && (
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              {/* Left Column (spans 2/5 on desktop) */}
+              <div className="lg:col-span-2 flex flex-col gap-4">
+                {/* Intro Box */}
+                <div className="card p-4 flex flex-col gap-3">
+                  <h3 className="font-display font-bold text-slate-800 text-base">Intro</h3>
+                  <p className="text-sm text-slate-600 text-center py-2 bg-slate-50 rounded-xl italic">
+                    "{profile?.bio || "Aucune bio pour le moment."}"
+                  </p>
+                  <div className="flex flex-col gap-2.5 text-xs text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <Cake size={15} className="text-slate-400" />
+                      <span>Anniversaire : {profile?.birthdate ? new Date(profile.birthdate).toLocaleDateString("fr-FR") : "Non renseigné"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <LinkIcon size={15} className="text-slate-400" />
+                      <span className="truncate">justalk.app/{profile?.pseudo}</span>
+                    </div>
+                  </div>
+                </div>
 
-        {/* Content */}
-        <div className="mt-4 flex gap-6">
-          <LeftSidebar user={profile} />
-          <section className="flex-1 max-w-2xl mx-auto flex flex-col gap-4">
-            {tab === "Posts" && (
-              <div className="flex flex-col gap-4 w-full">
-                {posts.map((post) => (
-                  <PostCard key={post.id} post={post} />
+                {/* Photos Grid Box */}
+                <div className="card p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-display font-bold text-slate-800 text-base">Photos</h3>
+                    <button onClick={() => setTab("Photos")} className="text-xs font-semibold text-electric hover:underline border-0 bg-transparent cursor-pointer">Voir toutes les photos</button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5 rounded-xl overflow-hidden">
+                    {photos.slice(0, 9).map((img, i) => (
+                      <div key={i} className="aspect-square bg-slate-100 overflow-hidden hover:opacity-90 transition-opacity">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                    {photos.length === 0 && (
+                      <p className="col-span-3 text-center text-xs text-slate-400 py-6">Aucune photo publiée.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Friends Grid Box */}
+                <div className="card p-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="font-display font-bold text-slate-800 text-base">Amis</h3>
+                    <button onClick={() => setTab("Amis")} className="text-xs font-semibold text-electric hover:underline border-0 bg-transparent cursor-pointer">Tous les amis</button>
+                  </div>
+                  <p className="text-xs text-slate-400 mb-3">128 amis (membres suggérés)</p>
+                  <div className="grid grid-cols-3 gap-x-2 gap-y-3">
+                    {recentMembers.slice(0, 9).map((m) => (
+                      <Link key={m.id} href={`/profil?id=${m.id}`} className="flex flex-col items-center group">
+                        <div className="w-full aspect-square rounded-lg bg-electric/10 overflow-hidden shadow-sm flex items-center justify-center font-bold text-electric text-lg group-hover:opacity-85 transition-opacity">
+                          {m.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            m.pseudo?.[0]?.toUpperCase()
+                          )}
+                        </div>
+                        <span className="text-[10px] font-semibold text-slate-700 mt-1 truncate w-full text-center group-hover:text-electric transition-colors">
+                          {m.displayName || m.pseudo}
+                        </span>
+                      </Link>
+                    ))}
+                    {recentMembers.length === 0 && (
+                      <p className="col-span-3 text-center text-xs text-slate-400 py-6">Aucun membre.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column (spans 3/5 on desktop) */}
+              <div className="lg:col-span-3 flex flex-col gap-4">
+                {isMyProfile && (
+                  <CreatePost user={profile} onPublish={handlePublish} />
+                )}
+                
+                <div className="flex flex-col gap-4 w-full">
+                  {posts.map((post) => {
+                    const resolvedAuthor = usersMap[post.authorId] || post.author;
+                    const postWithResolvedAuthor = {
+                      ...post,
+                      author: {
+                        ...post.author,
+                        pseudo: resolvedAuthor?.pseudo || post.author?.pseudo || "Utilisateur",
+                        avatarUrl: resolvedAuthor?.avatarUrl || post.author?.avatarUrl || null,
+                      },
+                      likedByMe: !!myLikes[post.id],
+                    };
+                    return (
+                      <PostCard
+                        key={post.id}
+                        post={postWithResolvedAuthor}
+                        onLike={handleLike}
+                      />
+                    );
+                  })}
+                  
+                  {posts.length === 0 && !loadingPosts && (
+                    <div className="card-lg p-10 text-center text-slate-400 w-full bg-white rounded-2xl">
+                      {profile?.pseudo
+                        ? `${profile.pseudo} n'a encore rien publié.`
+                        : "Aucun post pour le moment."}
+                    </div>
+                  )}
+                  
+                  {loadingPosts && (
+                    <div className="text-center py-4 text-electric text-sm w-full">
+                      Chargement des publications…
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === "À propos" && (
+            <div className="card-lg p-6 text-sm text-slate-600 bg-white rounded-2xl max-w-2xl mx-auto mt-4">
+              <h3 className="font-display font-bold text-slate-800 text-lg mb-2">À propos</h3>
+              <p className="mb-2 leading-relaxed">Compte créé via authentification biométrique Justalk.</p>
+              <div className="grid grid-cols-2 gap-3 mt-4 text-xs">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <p className="text-slate-400">Identifiant Unique (UID)</p>
+                  <p className="font-mono text-slate-800 font-semibold mt-0.5 truncate">{profile?.uid}</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <p className="text-slate-400">Pseudo Public</p>
+                  <p className="text-slate-800 font-semibold mt-0.5">@{profile?.pseudo}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {tab === "Amis" && (
+            <div className="card p-6 bg-white rounded-2xl max-w-2xl mx-auto mt-4">
+              <h3 className="font-display font-bold text-slate-800 text-lg mb-3">Membres Justalk</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {recentMembers.map((m) => (
+                  <Link key={m.id} href={`/profil?id=${m.id}`} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-50 transition-colors border border-slate-100">
+                    <div className="w-10 h-10 rounded-full bg-electric/10 flex items-center justify-center font-bold text-electric text-sm shrink-0 overflow-hidden">
+                      {m.avatarUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        m.pseudo?.[0]?.toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-slate-800 truncate">{m.displayName || m.pseudo}</p>
+                      <p className="text-[10px] text-slate-400 truncate">@{m.pseudo}</p>
+                    </div>
+                  </Link>
                 ))}
-                
-                {posts.length === 0 && !loadingPosts && (
-                  <div className="card-lg p-10 text-center text-slate-400 w-full">
-                    {profile?.pseudo
-                      ? `${profile.pseudo} n'a encore rien publié.`
-                      : "Aucun post pour le moment."}
-                  </div>
-                )}
-                
-                {loadingPosts && (
-                  <div className="text-center py-4 text-electric text-sm w-full">
-                    Chargement des publications…
-                  </div>
-                )}
               </div>
-            )}
-            {tab === "À propos" && (
-              <div className="card-lg p-6 text-sm text-slate-600">
-                <p>Compte créé via authentification biométrique Justalk.</p>
-              </div>
-            )}
-            {tab === "Amis" && (
-              <div className="card-lg p-10 text-center text-slate-400">Aucun ami pour le moment.</div>
-            )}
-            {tab === "Photos" && (
-              <div className="card-lg p-10 text-center text-slate-400">Aucune photo pour le moment.</div>
-            )}
+            </div>
+          )}
 
-            {/* Boutons de modification et déconnexion en bas du profil */}
-            {isMyProfile && (
-              <div className="flex gap-3 mt-6 pt-4 border-t border-slate-200">
-                <button onClick={() => setEditOpen(true)} className="btn-ghost flex-1">Modifier le profil</button>
-                <button onClick={handleLogout} className="btn-ghost border-red-200 text-red-500 hover:border-red-500 hover:bg-red-50 flex-1">Se déconnecter</button>
+          {tab === "Photos" && (
+            <div className="card p-6 bg-white rounded-2xl max-w-2xl mx-auto mt-4">
+              <h3 className="font-display font-bold text-slate-800 text-lg mb-3">Photos publiées</h3>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {photos.map((img, i) => (
+                  <div key={i} className="aspect-square bg-slate-50 rounded-xl overflow-hidden hover:opacity-90 transition-opacity border border-slate-100">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img} alt="" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+                {photos.length === 0 && (
+                  <p className="col-span-3 sm:col-span-4 text-center text-sm text-slate-400 py-12">Aucune photo pour le moment.</p>
+                )}
               </div>
-            )}
-          </section>
+            </div>
+          )}
         </div>
       </main>
     </div>

@@ -12,10 +12,10 @@ import { MessageSquare, Users } from "lucide-react";
 export default function RightSidebar() {
   const [members, setMembers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const currentUser = useCurrentUser();
+  const { user: currentUser, firebaseReady } = useCurrentUser();
 
   useEffect(() => {
-    if (!currentUser?.uid) return;
+    if (!currentUser?.uid || !firebaseReady) return;
     
     const q = query(
       collection(db, "users"),
@@ -37,7 +37,7 @@ export default function RightSidebar() {
     );
 
     return () => unsub();
-  }, [currentUser?.uid]);
+  }, [currentUser?.uid, firebaseReady]);
 
   if (!currentUser) return null;
 

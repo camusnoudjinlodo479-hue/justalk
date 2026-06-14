@@ -11,6 +11,13 @@ import {
   getDocs,
   addDoc,
   serverTimestamp,
+  onSnapshot,
+  doc,
+  updateDoc,
+  deleteDoc,
+  setDoc,
+  increment,
+  where,
 } from "firebase/firestore";
 import { db, storage } from "@/lib/firebase";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -27,13 +34,106 @@ import { Search } from "lucide-react";
 const PAGE_SIZE = 5;
 
 export default function FeedPage() {
-  const user = useCurrentUser();
+  const { user, firebaseReady } = useCurrentUser();
   const [posts, setPosts] = useState([]);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const sentinelRef = useRef(null);
+
+  const [usersMap, setUsersMap] = useState({});
+  const [myLikes, setMyLikes] = useState({});
+  const [stories, setStories] = useState([]);
+
+  // Écoute des utilisateurs en temps réel
+  useEffect(() => {
+    if (!firebaseReady) return;
+    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+      const map = {};
+      snap.docs.forEach((d) => {
+        map[d.id] = d.data();
+      });
+      setUsersMap(map);
+    });
+    return () => unsub();
+  }, [firebaseReady]);
+
+  // Écoute des likes de l'utilisateur connecté en temps réel
+  useEffect(() => {
+    if (!user?.uid || !firebaseReady) return;
+    const q = query(collection(db, "likes"), where("userId", "==", user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      const likesMap = {};
+      snap.docs.forEach((d) => {
+        likesMap[d.data().postId] = true;
+      });
+      setMyLikes(likesMap);
+    }, (err) => {
+      console.error("Erreur likes sync:", err);
+    });
+    return () => unsub();
+  }, [user?.uid, firebaseReady]);
+
+  // Écoute des stories actives en temps réel
+  useEffect(() => {
+    if (!firebaseReady) return;
+    const q = query(collection(db, "stories"), orderBy("createdAt", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      const activeStories = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((s) => {
+          const expiresAt = s.expiresAt?.toDate ? s.expiresAt.toDate() : new Date(s.expiresAt);
+          return expiresAt > new Date();
+        });
+      setStories(activeStories);
+    }, (err) => {
+      console.error("Erreur stories sync:", err);
+    });
+    return () => unsub();
+  }, [firebaseReady]);
+
+  async function handleLike(postId, isLiked) {
+    if (!user) return;
+    const likeId = `${user.uid}_${postId}`;
+    const likeRef = doc(db, "likes", likeId);
+    const postRef = doc(db, "posts", postId);
+    try {
+      if (isLiked) {
+        await setDoc(likeRef, { userId: user.uid, postId, createdAt: serverTimestamp() });
+        await updateDoc(postRef, { likes: increment(1) });
+      } else {
+        await deleteDoc(likeRef);
+        await updateDoc(postRef, { likes: increment(-1) });
+      }
+    } catch (err) {
+      console.error("Erreur like toggle:", err);
+    }
+  }
+
+  async function handleCreateStory(file) {
+    if (!user) return;
+    try {
+      const fileRef = ref(storage, `stories/${user.uid}/${Date.now()}_${file.name}`);
+      const uploadResult = await uploadBytes(fileRef, file);
+      const mediaUrl = await getDownloadURL(uploadResult.ref);
+      
+      const createdAt = new Date();
+      const expiresAt = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000); // 24h later
+
+      await addDoc(collection(db, "stories"), {
+        authorId: user.uid,
+        pseudo: user.pseudo,
+        avatarUrl: user.avatarUrl || null,
+        mediaUrl,
+        createdAt: serverTimestamp(),
+        expiresAt: expiresAt,
+      });
+    } catch (err) {
+      console.error("Erreur création story :", err);
+      alert("L'upload de la story a échoué.");
+    }
+  }
 
   const filteredPosts = posts.filter((p) => {
     const q = searchQuery.toLowerCase().trim();
@@ -44,44 +144,23 @@ export default function FeedPage() {
     );
   });
 
-  const loadMore = useCallback(async () => {
-    if (loading || !hasMore) return;
+  useEffect(() => {
+    if (!user?.uid || !firebaseReady) return;
     setLoading(true);
-    try {
-      const base = collection(db, "posts");
-      const q = lastDoc
-        ? query(base, orderBy("createdAt", "desc"), startAfter(lastDoc), limit(PAGE_SIZE))
-        : query(base, orderBy("createdAt", "desc"), limit(PAGE_SIZE));
-
-      const snap = await getDocs(q);
-      const newPosts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      setPosts((prev) => [...prev, ...newPosts]);
-      setLastDoc(snap.docs[snap.docs.length - 1] || null);
-      setHasMore(snap.docs.length === PAGE_SIZE);
-    } catch (e) {
-      console.error("Erreur chargement feed:", e);
-      setHasMore(false);
-    } finally {
-      setLoading(false);
-    }
-  }, [lastDoc, hasMore, loading]);
-
-  useEffect(() => {
-    loadMore();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Observer pour scroll infini
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      (entries) => entries[0].isIntersecting && loadMore(),
-      { rootMargin: "200px" }
+    const q = query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(50));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setPosts(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setLoading(false);
+      },
+      (err) => {
+        console.error("Erreur chargement posts en temps réel :", err);
+        setLoading(false);
+      }
     );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [loadMore]);
+    return () => unsub();
+  }, [user?.uid, firebaseReady]);
 
   async function handlePublish({ text, mediaFile }) {
     if (!user) return;
@@ -145,7 +224,7 @@ export default function FeedPage() {
         <LeftSidebar user={user} />
 
         <section className="flex-1 max-w-2xl mx-auto flex flex-col gap-4">
-          <StoryBar user={user} stories={[]} />
+          <StoryBar user={user} stories={stories} onPublishStory={handleCreateStory} />
           <CreatePost user={user} onPublish={handlePublish} />
 
           {/* Barre de recherche des publications */}
@@ -159,9 +238,25 @@ export default function FeedPage() {
             />
           </div>
 
-          {filteredPosts.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
+          {filteredPosts.map((post) => {
+            const resolvedAuthor = usersMap[post.authorId] || post.author;
+            const postWithResolvedAuthor = {
+              ...post,
+              author: {
+                ...post.author,
+                pseudo: resolvedAuthor?.pseudo || post.author?.pseudo || "Utilisateur",
+                avatarUrl: resolvedAuthor?.avatarUrl || post.author?.avatarUrl || null,
+              },
+              likedByMe: !!myLikes[post.id],
+            };
+            return (
+              <PostCard
+                key={post.id}
+                post={postWithResolvedAuthor}
+                onLike={handleLike}
+              />
+            );
+          })}
 
           {filteredPosts.length === 0 && !loading && (
             <div className="card-lg p-10 text-center text-slate-400">
@@ -169,9 +264,9 @@ export default function FeedPage() {
             </div>
           )}
 
-          <div ref={sentinelRef} className="h-10 flex items-center justify-center">
+          <div className="h-10 flex items-center justify-center">
             {loading && <span className="text-electric text-sm">Chargement…</span>}
-            {!hasMore && posts.length > 0 && (
+            {!loading && filteredPosts.length > 0 && (
               <span className="text-slate-400 text-xs">Tu as tout vu ✨</span>
             )}
           </div>

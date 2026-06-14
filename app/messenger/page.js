@@ -15,7 +15,7 @@ import { deleteCall } from "@/lib/webrtc";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 
 export default function MessengerPage() {
-  const user = useCurrentUser();
+  const { user, firebaseReady } = useCurrentUser();
   const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [call, setCall] = useState(null); // { peer, mode, callId }
@@ -34,7 +34,7 @@ export default function MessengerPage() {
 
   // Écoute les conversations en temps réel
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || !firebaseReady) return;
     const q = query(collection(db, "conversations"), where("members", "array-contains", user.uid));
     const unsub = onSnapshot(q, (snap) => {
       const list = snap.docs.map((d) => {
@@ -59,11 +59,11 @@ export default function MessengerPage() {
       }
     });
     return () => unsub();
-  }, [user?.uid, activeId]);
+  }, [user?.uid, activeId, firebaseReady]);
 
   // Gère la création/sélection automatique si redirection via 'to=UID'
   useEffect(() => {
-    if (!user?.uid || !toUid) return;
+    if (!user?.uid || !toUid || !firebaseReady) return;
 
     // Identifiant unique prédictif pour la conversation entre les deux membres
     const convId = user.uid < toUid ? `${user.uid}_${toUid}` : `${toUid}_${user.uid}`;
@@ -112,7 +112,7 @@ export default function MessengerPage() {
     }
 
     initConversation();
-  }, [user, toUid]);
+  }, [user, toUid, firebaseReady]);
 
 
   const active = conversations.find((c) => c.id === activeId) || null;
