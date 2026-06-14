@@ -22,6 +22,7 @@ import StoryBar from "@/components/feed/StoryBar";
 import CreatePost from "@/components/feed/CreatePost";
 import PostCard from "@/components/feed/PostCard";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import { Search } from "lucide-react";
 
 const PAGE_SIZE = 5;
 
@@ -31,7 +32,17 @@ export default function FeedPage() {
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const sentinelRef = useRef(null);
+
+  const filteredPosts = posts.filter((p) => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      p.text?.toLowerCase().includes(q) ||
+      p.author?.pseudo?.toLowerCase().includes(q)
+    );
+  });
 
   const loadMore = useCallback(async () => {
     if (loading || !hasMore) return;
@@ -137,11 +148,22 @@ export default function FeedPage() {
           <StoryBar user={user} stories={[]} />
           <CreatePost user={user} onPublish={handlePublish} />
 
-          {posts.map((post) => (
+          {/* Barre de recherche des publications */}
+          <div className="card p-3.5 flex items-center gap-3 shadow-sm">
+            <Search className="text-slate-400 shrink-0" size={18} />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher des publications ou par pseudo d'auteur…"
+              className="w-full bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400"
+            />
+          </div>
+
+          {filteredPosts.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}
 
-          {posts.length === 0 && !loading && (
+          {filteredPosts.length === 0 && !loading && (
             <div className="card-lg p-10 text-center text-slate-400">
               Aucun post pour le moment. Sois le premier à publier !
             </div>

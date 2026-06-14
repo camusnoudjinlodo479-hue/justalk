@@ -11,6 +11,7 @@ import { MessageSquare, Users } from "lucide-react";
 
 export default function RightSidebar() {
   const [members, setMembers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const currentUser = useCurrentUser();
 
   useEffect(() => {
@@ -40,6 +41,15 @@ export default function RightSidebar() {
 
   if (!currentUser) return null;
 
+  const filteredMembers = members.filter((m) => {
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      m.pseudo?.toLowerCase().includes(q) ||
+      m.displayName?.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <aside className="hidden xl:flex flex-col gap-3 w-64 shrink-0 sticky top-20 self-start">
       <div className="flex items-center gap-1.5 px-3 mb-1">
@@ -48,13 +58,22 @@ export default function RightSidebar() {
           Membres récents
         </h3>
       </div>
+
+      <div className="px-3 mb-1">
+        <input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Rechercher un membre…"
+          className="input-pill py-2 px-3 text-xs bg-bg"
+        />
+      </div>
       
-      {members.length === 0 && (
-        <p className="px-3 text-sm text-slate-400">Aucun autre membre inscrit.</p>
+      {filteredMembers.length === 0 && (
+        <p className="px-3 text-sm text-slate-400">Aucun membre trouvé.</p>
       )}
 
-      <div className="flex flex-col gap-1 max-h-[calc(100vh-12rem)] overflow-y-auto pr-1">
-        {members.map((m) => (
+      <div className="flex flex-col gap-1 max-h-[calc(100vh-14rem)] overflow-y-auto pr-1">
+        {filteredMembers.map((m) => (
           <Link
             key={m.id}
             href={`/messenger?to=${m.id}`}
