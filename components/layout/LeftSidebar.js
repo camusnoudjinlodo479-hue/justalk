@@ -1,6 +1,8 @@
 // components/layout/LeftSidebar.js
 import Link from "next/link";
-import { User, Users, MessageCircle, Bookmark, Film, Bell, Image as ImageIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { auth } from "@/lib/firebase";
+import { User, Users, MessageCircle, Bookmark, Film, Bell, Image as ImageIcon, LogOut } from "lucide-react";
 
 const LINKS = [
   { href: "/profil", label: "Mon profil", icon: User },
@@ -13,6 +15,19 @@ const LINKS = [
 ];
 
 export default function LeftSidebar({ user }) {
+  const router = useRouter();
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/session/logout", { method: "POST" });
+      await auth.signOut();
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      console.error("Erreur de déconnexion :", err);
+    }
+  }
+
   return (
     <aside className="hidden lg:flex flex-col gap-1 w-64 shrink-0 sticky top-20 self-start">
       <Link href="/profil" className="card p-3 flex items-center gap-3 hover:shadow-glow transition-shadow">
@@ -36,6 +51,13 @@ export default function LeftSidebar({ user }) {
           <Icon size={20} /> {label}
         </Link>
       ))}
+
+      <button
+        onClick={handleLogout}
+        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-500 font-medium text-sm hover:bg-red-50 hover:text-red-600 transition-all text-left w-full mt-2"
+      >
+        <LogOut size={20} /> Se déconnecter
+      </button>
     </aside>
   );
 }

@@ -57,6 +57,11 @@ export default function PostCard({ post, onLike, onComment, onShare }) {
           <img src={post.imageUrl} alt="" className="w-full max-h-[480px] object-cover" />
         </div>
       )}
+      {post.videoUrl && (
+        <div className="mt-3 rounded-xl overflow-hidden bg-bg">
+          <video src={post.videoUrl} controls className="w-full max-h-[480px] object-cover rounded-xl" />
+        </div>
+      )}
 
       {/* Stats */}
       <div className="flex items-center justify-between mt-3 text-xs text-slate-400">

@@ -1,6 +1,8 @@
 "use client";
 // app/profil/page.js
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { auth } from "@/lib/firebase";
 import EditProfileModal from "@/components/profile/EditProfileModal";
 import { Camera, Cake, Link as LinkIcon } from "lucide-react";
 import Header from "@/components/layout/Header";
@@ -14,6 +16,7 @@ import { db } from "@/lib/firebase";
 const TABS = ["Posts", "À propos", "Amis", "Photos"];
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [user, setUser] = useState(null);
   const fetchedUser = useCurrentUser();
   const [tab, setTab] = useState("Posts");
@@ -22,6 +25,17 @@ export default function ProfilePage() {
   const [targetUser, setTargetUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/session/logout", { method: "POST" });
+      await auth.signOut();
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      console.error("Erreur de déconnexion :", err);
+    }
+  }
 
   // Détecte le paramètre de requête 'id' dans l'URL
   useEffect(() => {
@@ -130,7 +144,10 @@ export default function ProfilePage() {
             </div>
           </div>
           {isMyProfile && (
-            <button onClick={() => setEditOpen(true)} className="btn-ghost">Modifier le profil</button>
+            <div className="flex gap-2">
+              <button onClick={() => setEditOpen(true)} className="btn-ghost">Modifier le profil</button>
+              <button onClick={handleLogout} className="btn-ghost border-red-200 text-red-500 hover:border-red-500 hover:bg-red-50">Se déconnecter</button>
+            </div>
           )}
         </div>
 

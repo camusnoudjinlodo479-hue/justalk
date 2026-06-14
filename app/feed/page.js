@@ -12,7 +12,8 @@ import {
   addDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, storage } from "@/lib/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import Header from "@/components/layout/Header";
 import MobileNav from "@/components/layout/MobileNav";
 import LeftSidebar from "@/components/layout/LeftSidebar";
@@ -71,8 +72,13 @@ export default function FeedPage() {
     return () => observer.disconnect();
   }, [loadMore]);
 
-  async function handlePublish({ text }) {
+  async function handlePublish({ text, mediaFile }) {
     if (!user) return;
+    
+    // URL temporaire pour la prévisualisation optimiste locale
+    const tempUrl = mediaFile ? URL.createObjectURL(mediaFile) : null;
+    const isVideo = mediaFile?.type?.startsWith("video/");
+
     const optimistic = {
       id: `tmp-${Date.now()}`,
       text,
@@ -82,13 +88,34 @@ export default function FeedPage() {
       commentsCount: 0,
       shares: 0,
       createdAtLabel: "À l'instant",
+      imageUrl: mediaFile && !isVideo ? tempUrl : null,
+      videoUrl: mediaFile && isVideo ? tempUrl : null,
     };
+
     setPosts((prev) => [optimistic, ...prev]);
+
     try {
+      let mediaUrl = null;
+      let mediaType = null;
+
+      if (mediaFile) {
+        try {
+          const fileRef = ref(storage, `posts/${user.uid}/${Date.now()}_${mediaFile.name}`);
+          const uploadResult = await uploadBytes(fileRef, mediaFile);
+          mediaUrl = await getDownloadURL(uploadResult.ref);
+          mediaType = isVideo ? "video" : "image";
+        } catch (storageErr) {
+          console.error("Erreur d'upload Storage :", storageErr);
+          alert("L'upload de la photo/vidéo a échoué. Le post sera publié sans média.");
+        }
+      }
+
       await addDoc(collection(db, "posts"), {
         text,
         authorId: user.uid,
         author: { pseudo: user.pseudo, avatarUrl: user.avatarUrl || null },
+        imageUrl: mediaType === "image" ? mediaUrl : null,
+        videoUrl: mediaType === "video" ? mediaUrl : null,
         likes: 0,
         commentsCount: 0,
         shares: 0,
