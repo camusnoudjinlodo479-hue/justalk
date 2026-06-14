@@ -143,12 +143,6 @@ export default function ProfilePage() {
               <span className="flex items-center gap-1"><LinkIcon size={12} /> justalk.app/{profile?.pseudo}</span>
             </div>
           </div>
-          {isMyProfile && (
-            <div className="flex gap-2">
-              <button onClick={() => setEditOpen(true)} className="btn-ghost">Modifier le profil</button>
-              <button onClick={handleLogout} className="btn-ghost border-red-200 text-red-500 hover:border-red-500 hover:bg-red-50">Se déconnecter</button>
-            </div>
-          )}
         </div>
 
         <EditProfileModal
@@ -210,6 +204,14 @@ export default function ProfilePage() {
             )}
             {tab === "Photos" && (
               <div className="card-lg p-10 text-center text-slate-400">Aucune photo pour le moment.</div>
+            )}
+
+            {/* Boutons de modification et déconnexion en bas du profil */}
+            {isMyProfile && (
+              <div className="flex gap-3 mt-6 pt-4 border-t border-slate-200">
+                <button onClick={() => setEditOpen(true)} className="btn-ghost flex-1">Modifier le profil</button>
+                <button onClick={handleLogout} className="btn-ghost border-red-200 text-red-500 hover:border-red-500 hover:bg-red-50 flex-1">Se déconnecter</button>
+              </div>
             )}
           </section>
         </div>

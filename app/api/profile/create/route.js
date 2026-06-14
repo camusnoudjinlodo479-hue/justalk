@@ -41,8 +41,7 @@ export async function POST(req) {
       const buffer = Buffer.from(await avatar.arrayBuffer());
       const file = bucket.file(filePath);
       await file.save(buffer, { contentType: avatar.type });
-      await file.makePublic();
-      update.avatarUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+      update.avatarUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media`;
     } catch (storageError) {
       console.error("Erreur critique Firebase Storage lors de la création de l'avatar (on continue sans avatar) :", storageError);
     }

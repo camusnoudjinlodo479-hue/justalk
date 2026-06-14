@@ -72,13 +72,12 @@ export default function EditProfileModal({ user, open, onClose, onSaved }) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={coverPreview} alt="" className="w-full h-full object-cover" />
           )}
-          <button
-            type="button"
+          <div
             onClick={() => coverRef.current?.click()}
-            className="absolute bottom-2 right-2 icon-btn bg-white/90"
+            className="absolute bottom-2 right-2 icon-btn bg-white/90 cursor-pointer"
           >
             <Camera size={16} />
-          </button>
+          </div>
           <input ref={coverRef} type="file" accept="image/*" className="hidden" onChange={(e) => handlePreview(e, setCoverPreview)} />
 
           <button type="button" onClick={onClose} className="absolute top-2 right-2 icon-btn bg-white/90">
@@ -86,10 +85,9 @@ export default function EditProfileModal({ user, open, onClose, onSaved }) {
           </button>
 
           {/* Avatar overlapping */}
-          <button
-            type="button"
+          <div
             onClick={() => avatarRef.current?.click()}
-            className="absolute -bottom-10 left-5 w-20 h-20 rounded-full border-4 border-white bg-electric/10 shadow-embossed-lg overflow-hidden flex items-center justify-center font-bold text-2xl text-electric group"
+            className="absolute -bottom-10 left-5 w-20 h-20 rounded-full border-4 border-white bg-electric/10 shadow-embossed-lg overflow-hidden flex items-center justify-center font-bold text-2xl text-electric group cursor-pointer"
           >
             {avatarPreview ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -100,7 +98,7 @@ export default function EditProfileModal({ user, open, onClose, onSaved }) {
             <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               <Camera size={18} className="text-white" />
             </div>
-          </button>
+          </div>
           <input ref={avatarRef} type="file" accept="image/*" className="hidden" onChange={(e) => handlePreview(e, setAvatarPreview)} />
         </div>
 
