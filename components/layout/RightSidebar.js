@@ -16,6 +16,8 @@ export default function RightSidebar() {
   useEffect(() => {
     if (!currentUser?.uid || !sessionReady) return;
 
+    let localMembers = [];
+
     async function fetchMembers() {
       const { data, error } = await supabase
         .from("users")
@@ -24,7 +26,7 @@ export default function RightSidebar() {
         .limit(25);
 
       if (!error && data) {
-        const list = data
+        localMembers = data
           .map((u) => ({
             id: u.id,
             pseudo: u.pseudo,
@@ -33,14 +35,24 @@ export default function RightSidebar() {
             online: u.online,
           }))
           .filter((u) => u.id !== currentUser.uid);
-        setMembers(list);
+        
+        // Sync with current presence state if subscribed
+        const state = supabase.channel("online-users").presenceState();
+        const onlineIds = Object.keys(state);
+
+        setMembers(
+          localMembers.map((m) => ({
+            ...m,
+            online: onlineIds.includes(m.id),
+          }))
+        );
       }
     }
 
     fetchMembers();
 
-    // Écoute en temps réel de toute modification sur la table users (inscription, profil, statut en ligne)
-    const channel = supabase
+    // Écoute en temps réel de toute modification sur la table users (inscription, profil)
+    const dbChannel = supabase
       .channel("right-sidebar-users")
       .on(
         "postgres_changes",
@@ -51,8 +63,25 @@ export default function RightSidebar() {
       )
       .subscribe();
 
+    // Écoute de la présence en temps réel via Supabase Presence
+    const presenceChannel = supabase.channel("online-users");
+
+    presenceChannel
+      .on("presence", { event: "sync" }, () => {
+        const state = presenceChannel.presenceState();
+        const onlineIds = Object.keys(state);
+        setMembers((prev) =>
+          prev.map((m) => ({
+            ...m,
+            online: onlineIds.includes(m.id),
+          }))
+        );
+      })
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(dbChannel);
+      supabase.removeChannel(presenceChannel);
     };
   }, [currentUser?.uid, sessionReady]);
 

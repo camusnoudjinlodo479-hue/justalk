@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 export default function Header({ user, notifCount = 0 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [newUserNotification, setNewUserNotification] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(notifCount);
   const listenerStartTime = useRef(Date.now());
 
   // Permission de notifications push
@@ -19,6 +20,68 @@ export default function Header({ user, notifCount = 0 }) {
       }
     }
   }, []);
+
+  // Sync prop notifCount with local state
+  useEffect(() => {
+    setUnreadCount(notifCount);
+  }, [notifCount]);
+
+  // Écoute globale de la présence et des notifications en temps réel
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    // 1. Suivi de présence via Supabase Presence
+    const presenceChannel = supabase.channel("online-users", {
+      config: { presence: { key: user.uid } },
+    });
+
+    presenceChannel.subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        await presenceChannel.track({
+          uid: user.uid,
+          pseudo: user.pseudo,
+          online_at: new Date().toISOString(),
+        });
+      }
+    });
+
+    // 2. Comptage initial des notifications non lues
+    async function fetchUnreadCount() {
+      const { count, error } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("to_user_id", user.uid)
+        .eq("read", false);
+
+      if (!error) {
+        setUnreadCount(count || 0);
+      }
+    }
+
+    fetchUnreadCount();
+
+    // 3. Abonnement temps réel aux changements de notifications pour mettre à jour le compteur
+    const notifsChannel = supabase
+      .channel(`header-notifications-${user.uid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `to_user_id=eq.${user.uid}`,
+        },
+        () => {
+          fetchUnreadCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(presenceChannel);
+      supabase.removeChannel(notifsChannel);
+    };
+  }, [user?.uid]);
 
   // Écoute des nouveaux inscrits via Supabase Realtime
   useEffect(() => {
@@ -104,9 +167,9 @@ export default function Header({ user, notifCount = 0 }) {
         <div className="flex items-center gap-2 shrink-0">
           <Link href="/notifications" className="icon-btn relative">
             <Bell size={18} />
-            {notifCount > 0 && (
+            {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-electric text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                {notifCount > 9 ? "9+" : notifCount}
+                {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
           </Link>
