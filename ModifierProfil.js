@@ -15,7 +15,20 @@ import {
 // ⚠️ Ajustez le chemin d'accès à votre client Supabase configuré
 import { supabase } from './lib/supabase'; 
 
+// Fonction utilitaire pour éviter que les requêtes Supabase ne restent bloquées indéfiniment
+const withTimeout = (promise, ms = 8000) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("La requête réseau a expiré (Timeout de " + (ms/1000) + "s).")), ms)
+    )
+  ]);
+};
+
 export default function ModifierProfil({ navigation }) {
+  // Stockage de l'ID utilisateur connecté
+  const [userId, setUserId] = useState(null);
+
   // States des champs du formulaire
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -31,37 +44,52 @@ export default function ModifierProfil({ navigation }) {
   useEffect(() => {
     async function loadUserProfile() {
       try {
-        console.log("Récupération de la session utilisateur...");
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        console.log("[DEBUG] [loadUserProfile] Récupération de la session utilisateur...");
         
-        if (authError) throw authError;
+        // Timeout sur la récupération de session
+        const authData = await withTimeout(supabase.auth.getUser(), 8000);
+        const user = authData?.data?.user;
+        
         if (!user) {
+          console.warn("[DEBUG] [loadUserProfile] Aucun utilisateur trouvé dans la session.");
           Alert.alert("Erreur", "Aucun utilisateur connecté.");
           if (navigation && navigation.goBack) navigation.goBack();
           return;
         }
 
-        console.log("Session active. UID:", user.id);
+        console.log("[DEBUG] [loadUserProfile] Session active. UID récupéré :", user.id);
+        setUserId(user.id);
 
-        // Récupérer le profil dans la table public.users
-        const { data: profile, error: profileError } = await supabase
-          .from('users')
-          .select('first_name, last_name, pseudo, bio, birthdate')
-          .eq('id', user.id)
-          .maybeSingle();
+        console.log("[DEBUG] [loadUserProfile] Récupération du profil depuis la table public.users...");
+        
+        // Timeout sur la requête de base de données
+        const { data: profile, error: profileError } = await withTimeout(
+          supabase
+            .from('users')
+            .select('first_name, last_name, pseudo, bio, birthdate')
+            .eq('id', user.id)
+            .maybeSingle(),
+          8000
+        );
 
-        if (profileError) throw profileError;
+        if (profileError) {
+          console.error("[DEBUG] [loadUserProfile] Erreur Supabase lors de la lecture :", profileError);
+          throw profileError;
+        }
 
         if (profile) {
+          console.log("[DEBUG] [loadUserProfile] Profil trouvé :", profile);
           setFirstName(profile.first_name || '');
           setLastName(profile.last_name || '');
           setPseudo(profile.pseudo || '');
           setBio(profile.bio || '');
           setBirthdate(profile.birthdate || '');
+        } else {
+          console.log("[DEBUG] [loadUserProfile] Aucun profil créé pour cet utilisateur dans la table 'users'.");
         }
       } catch (error) {
-        console.error("Erreur lors du chargement du profil:", error.message);
-        Alert.alert("Erreur", "Impossible de charger les données du profil.");
+        console.error("[DEBUG] [loadUserProfile] Exception attrapée :", error.message);
+        Alert.alert("Erreur de chargement", error.message || "Impossible de charger les données du profil.");
       } finally {
         setIsLoading(false);
       }
@@ -72,76 +100,65 @@ export default function ModifierProfil({ navigation }) {
 
   // Fonction de sauvegarde
   const handleSave = async () => {
-    // Empêcher les clics doubles si sauvegarde en cours
     if (isSaving) return;
 
     setIsSaving(true);
-    console.log("Début de handleSave()...");
+    console.log("[DEBUG] [handleSave] Début de la fonction handleSave()...");
 
     try {
-      // Vérification que la session et l'utilisateur existent
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
-      if (authError) {
-        console.error("Erreur d'authentification à la sauvegarde:", authError);
-        throw new Error("Session expirée ou invalide. Veuillez vous reconnecter.");
+      // 1. Utilisation de l'ID utilisateur stocké en state pour éviter un appel auth redondant
+      if (!userId) {
+        console.error("[DEBUG] [handleSave] Pas d'ID utilisateur en mémoire.");
+        throw new Error("ID utilisateur introuvable. Veuillez recharger la page.");
       }
+      console.log("[DEBUG] [handleSave] ID utilisateur cible :", userId);
 
-      if (!user || !user.id) {
-        console.error("User.id introuvable.");
-        throw new Error("Utilisateur non connecté ou ID manquant.");
-      }
-
-      console.log("ID utilisateur validé :", user.id);
-
-      // Validation minimale locale
+      // 2. Validation minimale
       if (!pseudo.trim()) {
         throw new Error("Le pseudo est obligatoire.");
       }
 
-      // Gestion de la contrainte date (SQL birthdate)
+      // 3. Formatage de la date de naissance
       let formattedBirthdate = null;
       if (birthdate.trim()) {
         const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
         if (!dateRegex.test(birthdate.trim())) {
-          throw new Error("La date de naissance doit respecter le format AAAA-MM-JJ (ex: 1995-12-31).");
+          throw new Error("La date de naissance doit être au format AAAA-MM-JJ (ex: 1995-12-31).");
         }
         formattedBirthdate = birthdate.trim();
       }
 
-      console.log("Données prêtes pour l'update Supabase :", {
+      const payload = {
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         pseudo: pseudo.trim(),
-        bio: bio.trim(),
+        bio: bio.trim() || null,
         birthdate: formattedBirthdate,
-      });
+      };
 
-      // Mise à jour de la table public.users
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-          pseudo: pseudo.trim(),
-          bio: bio.trim() || null,
-          birthdate: formattedBirthdate,
-        })
-        .eq('id', user.id);
+      console.log("[DEBUG] [handleSave] Envoi des données de mise à jour à Supabase...", payload);
+
+      // 4. Mise à jour avec Timeout pour empêcher le bouton de rester bloqué si la table est verrouillée (DB lock)
+      const { error: updateError } = await withTimeout(
+        supabase
+          .from('users')
+          .update(payload)
+          .eq('id', userId),
+        10000 // 10 secondes max pour répondre
+      );
 
       if (updateError) {
-        console.error("Erreur d'update Supabase reçue :", updateError);
+        console.error("[DEBUG] [handleSave] Supabase a retourné une erreur :", updateError);
         
-        // Gérer l'unicité du pseudo (Code SQL Postgres: 23505)
+        // Gestion de la contrainte unique pseudo (23505)
         if (updateError.code === '23505') {
           throw new Error("Ce pseudo est déjà pris par un autre utilisateur.");
         }
         throw updateError;
       }
 
-      console.log("Mise à jour réussie dans Supabase !");
+      console.log("[DEBUG] [handleSave] Mise à jour réussie avec succès !");
 
-      // Alerte succès + Navigation retour
       Alert.alert(
         "Succès", 
         "Profil mis à jour avec succès !", 
@@ -149,12 +166,11 @@ export default function ModifierProfil({ navigation }) {
       );
 
     } catch (error) {
-      console.log("Exception capturée dans handleSave :", error.message);
-      // Afficher l'erreur à l'utilisateur
+      console.error("[DEBUG] [handleSave] Exception attrapée lors de l'enregistrement :", error.message);
       Alert.alert("Erreur de sauvegarde", error.message || "Une erreur est survenue.");
     } finally {
-      // Remettre le bouton en mode actif
-      setIsSaving(false);
+      console.log("[DEBUG] [handleSave] Fin du traitement. Désactivation de isSaving.");
+      setIsSaving(false); // Libération systématique du bouton
     }
   };
 
@@ -197,7 +213,7 @@ export default function ModifierProfil({ navigation }) {
               placeholderTextColor="#94A3B8"
             />
 
-            {/* Pseudo (Obligatoire & Unique) */}
+            {/* Pseudo */}
             <Text style={styles.label}>Pseudo *</Text>
             <TextInput
               style={styles.input}
@@ -209,7 +225,7 @@ export default function ModifierProfil({ navigation }) {
               autoCorrect={false}
             />
 
-            {/* Date de naissance (SQL date) */}
+            {/* Date de naissance */}
             <Text style={styles.label}>Date de naissance (AAAA-MM-JJ)</Text>
             <TextInput
               style={styles.input}
@@ -236,7 +252,7 @@ export default function ModifierProfil({ navigation }) {
             <TouchableOpacity
               style={[styles.saveButton, isSaving && styles.disabledButton]}
               onPress={handleSave}
-              disabled={isSaving} // Désactiver le bouton pendant le traitement
+              disabled={isSaving}
             >
               {isSaving ? (
                 <View style={styles.savingRow}>
