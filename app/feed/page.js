@@ -14,7 +14,7 @@ import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Search } from "lucide-react";
 
 export default function FeedPage() {
-  const { user, firebaseReady } = useCurrentUser();
+  const { user, sessionReady } = useCurrentUser();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -51,7 +51,7 @@ export default function FeedPage() {
 
   // Écoute des posts en temps réel
   useEffect(() => {
-    if (!firebaseReady || !user?.uid) return;
+    if (!sessionReady || !user?.uid) return;
 
     fetchPosts();
 
@@ -69,7 +69,7 @@ export default function FeedPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [firebaseReady, user?.uid]);
+  }, [sessionReady, user?.uid]);
 
   // Récupération et écoute des profils utilisateurs
   async function fetchUsers() {
@@ -88,7 +88,7 @@ export default function FeedPage() {
   }
 
   useEffect(() => {
-    if (!firebaseReady) return;
+    if (!sessionReady) return;
 
     fetchUsers();
 
@@ -106,7 +106,7 @@ export default function FeedPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [firebaseReady]);
+  }, [sessionReady]);
 
   // Récupération et écoute des likes de l'utilisateur connecté
   async function fetchMyLikes() {
@@ -126,7 +126,7 @@ export default function FeedPage() {
   }
 
   useEffect(() => {
-    if (!user?.uid || !firebaseReady) return;
+    if (!user?.uid || !sessionReady) return;
 
     fetchMyLikes();
 
@@ -144,7 +144,7 @@ export default function FeedPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.uid, firebaseReady]);
+  }, [user?.uid, sessionReady]);
 
   // Récupération et écoute des stories
   async function fetchStories() {
@@ -171,7 +171,7 @@ export default function FeedPage() {
   }
 
   useEffect(() => {
-    if (!firebaseReady) return;
+    if (!sessionReady) return;
 
     fetchStories();
 
@@ -189,7 +189,7 @@ export default function FeedPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [firebaseReady]);
+  }, [sessionReady]);
 
   // Gère le like/unlike d'une publication
   async function handleLike(postId, isLiked) {

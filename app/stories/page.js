@@ -9,7 +9,7 @@ import { X, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 export default function StoriesPage() {
-  const { user, firebaseReady } = useCurrentUser();
+  const { user, sessionReady } = useCurrentUser();
   const [stories, setStories] = useState([]);
   const [index, setIndex] = useState(0);
   const [viewers, setViewers] = useState([]);
@@ -41,7 +41,7 @@ export default function StoriesPage() {
   }
 
   useEffect(() => {
-    if (!firebaseReady) return;
+    if (!sessionReady) return;
 
     fetchStories();
 
@@ -59,7 +59,7 @@ export default function StoriesPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [firebaseReady]);
+  }, [sessionReady]);
 
   // Détecte le paramètre de requête 'id' dans l'URL pour sélectionner la story active
   useEffect(() => {
@@ -78,7 +78,7 @@ export default function StoriesPage() {
 
   // Enregistre une vue de la story active (si ce n'est pas la nôtre)
   useEffect(() => {
-    if (!user?.uid || !active?.id || !firebaseReady) return;
+    if (!user?.uid || !active?.id || !sessionReady) return;
     if (active.authorId === user.uid) return;
 
     const viewId = `${user.uid}_${active.id}`;
@@ -94,7 +94,7 @@ export default function StoriesPage() {
     }
 
     recordView();
-  }, [active?.id, user?.uid, firebaseReady]);
+  }, [active?.id, user?.uid, sessionReady]);
 
   // Écoute les personnes ayant vu la story active (uniquement pour le créateur)
   async function fetchViewers() {
@@ -117,7 +117,7 @@ export default function StoriesPage() {
   }
 
   useEffect(() => {
-    if (!user?.uid || !active?.id || !firebaseReady) {
+    if (!user?.uid || !active?.id || !sessionReady) {
       setViewers([]);
       return;
     }
@@ -142,7 +142,7 @@ export default function StoriesPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [active?.id, user?.uid, firebaseReady]);
+  }, [active?.id, user?.uid, sessionReady]);
 
   return (
     <div className="min-h-screen pb-16 bg-slate-950 text-white">

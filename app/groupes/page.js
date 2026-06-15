@@ -9,7 +9,7 @@ import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Plus, Users, Shield } from "lucide-react";
 
 export default function GroupesPage() {
-  const { user, firebaseReady } = useCurrentUser();
+  const { user, sessionReady } = useCurrentUser();
   const [groups, setGroups] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -37,7 +37,7 @@ export default function GroupesPage() {
   }
 
   useEffect(() => {
-    if (!user?.uid || !firebaseReady) return;
+    if (!user?.uid || !sessionReady) return;
 
     fetchGroups();
 
@@ -55,7 +55,7 @@ export default function GroupesPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.uid, firebaseReady]);
+  }, [user?.uid, sessionReady]);
 
   async function createGroup(e) {
     e.preventDefault();

@@ -153,13 +153,34 @@ create table analytics (
   viewed_at timestamptz default now(),
   unique(post_id, viewer_id)
 );
+
+-- 14. Table calls (Signalisation WebRTC)
+create table calls (
+  id text primary key,
+  from_uid uuid not null references users(id) on delete cascade,
+  from_pseudo text not null,
+  to_uid uuid not null references users(id) on delete cascade,
+  offer jsonb,
+  answer jsonb,
+  status text not null default 'ringing' check (status in ('ringing', 'accepted', 'ended')),
+  created_at timestamptz default now()
+);
+
+-- 15. Table call_candidates (Candidats ICE pour WebRTC)
+create table call_candidates (
+  id uuid primary key default uuid_generate_v4(),
+  call_id text not null references calls(id) on delete cascade,
+  role text not null check (role in ('callerCandidates', 'calleeCandidates')),
+  candidate jsonb not null,
+  created_at timestamptz default now()
+);
 ```
 
 ## Enable Realtime Publications
 
 ```sql
 -- Activer Supabase Realtime sur les tables clés
-alter publication supabase_realtime add table users, posts, comments, likes, stories, story_views, messages, conversations, notifications, friendships, analytics;
+alter publication supabase_realtime add table users, posts, comments, likes, stories, story_views, messages, conversations, notifications, friendships, analytics, calls, call_candidates;
 ```
 
 ## Database Triggers (Compteurs & Notifications automatiques)

@@ -14,7 +14,7 @@ import { deleteCall } from "@/lib/webrtc";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 
 export default function MessengerPage() {
-  const { user, firebaseReady } = useCurrentUser();
+  const { user, sessionReady } = useCurrentUser();
   const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [call, setCall] = useState(null); // { peer, mode, callId }
@@ -63,7 +63,7 @@ export default function MessengerPage() {
   }
 
   useEffect(() => {
-    if (!user?.uid || !firebaseReady) return;
+    if (!user?.uid || !sessionReady) return;
 
     fetchConversations();
 
@@ -82,11 +82,11 @@ export default function MessengerPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.uid, activeId, firebaseReady]);
+  }, [user?.uid, activeId, sessionReady]);
 
   // Gère l'initialisation de la conversation par rapport à toUid
   useEffect(() => {
-    if (!user?.uid || !toUid || !firebaseReady) return;
+    if (!user?.uid || !toUid || !sessionReady) return;
 
     async function initConversation() {
       try {
@@ -146,7 +146,7 @@ export default function MessengerPage() {
     }
 
     initConversation();
-  }, [user, toUid, firebaseReady]);
+  }, [user, toUid, sessionReady]);
 
   const active = conversations.find((c) => c.id === activeId) || null;
 

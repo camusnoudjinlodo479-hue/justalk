@@ -1,7 +1,6 @@
 // components/layout/LeftSidebar.js
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase";
 import { User, Users, MessageCircle, Bookmark, Film, Bell, Image as ImageIcon, LogOut, BarChart3 } from "lucide-react";
 
 const LINKS = [
@@ -21,7 +20,6 @@ export default function LeftSidebar({ user }) {
   async function handleLogout() {
     try {
       await fetch("/api/session/logout", { method: "POST" });
-      await auth.signOut().catch(() => {});
       router.push("/");
       router.refresh();
     } catch (err) {

@@ -3,7 +3,7 @@
 Réseau social full-stack avec **inscription/connexion 100% biométrique**
 (WebAuthn + face-api.js), fil d'actualité, profil, Messenger temps réel,
 Stories, Groupes/Pages et Notifications. Next.js 14 (App Router) + Tailwind +
-Framer Motion + Firebase.
+Framer Motion + Supabase.
 
 ## 🎨 Branding
 
@@ -39,16 +39,11 @@ justalk/
 │   ├── feed/{StoryBar,CreatePost,PostCard}.js
 │   └── messenger/{ConversationList,ChatWindow}.js
 ├── lib/
-│   ├── firebase.js       # SDK client
-│   ├── firebaseAdmin.js  # SDK admin (API routes)
+│   ├── supabase.js       # Client Supabase (anon & admin)
 │   ├── webauthn.js       # wrapper @simplewebauthn/browser
 │   ├── faceMatch.js       # face-api.js -> descripteur -> hash SHA-256
 │   ├── session.js        # JWT httpOnly (jose)
 │   └── useCurrentUser.js
-├── functions/             # Cloud Functions (notifications, purge stories)
-├── firestore.rules
-├── firestore.indexes.json
-├── storage.rules
 └── middleware.js          # protège /feed, /messenger, etc.
 ```
 
@@ -65,7 +60,7 @@ justalk/
 3. **Étape schéma 3x3** : si la biométrie native est indisponible
    (`platformAuthenticatorIsAvailable() === false`), un schéma 3x3 (canvas)
    est demandé en secours et son hash SHA-256 stocké dans `users/{uid}.patternHash`.
-4. **Étape profil** : pseudo + photo (upload Storage via Admin SDK). Zéro
+4. **Étape profil** : pseudo + photo (upload Storage via client Supabase). Zéro
    email, zéro mot de passe à aucun moment.
 
 > Option avancée : `lib/webauthn.js` accepte toujours un `faceHash` optionnel
@@ -86,20 +81,16 @@ justalk/
   utilisé exclusivement pour bloquer les comptes en double.
 - Le schéma 3x3 de secours est également haché (`users/{uid}.patternHash`),
   jamais stocké en clair.
-- `biometricHashes` n'est accessible ni en lecture ni en écriture côté
-  client (`firestore.rules`) — uniquement via l'Admin SDK dans les routes API.
+- `biometric_hashes` n'est accessible ni en lecture ni en écriture côté
+  client (via RLS) — uniquement via le client Admin de Supabase dans les routes API.
 - Session : JWT signé (`JWT_SECRET`), cookie `httpOnly`, `secure` en
   production, `sameSite=lax`, expiration 30 jours (reconnexion auto).
 - `middleware.js` protège toutes les routes applicatives.
 
 ## 🚀 Déploiement
 
-### 1. Firebase
-```bash
-firebase login
-firebase init   # sélectionner Firestore, Storage, Functions (projet existant)
-firebase deploy --only firestore:rules,firestore:indexes,storage:rules,functions
-```
+### 1. Configuration SQL Supabase
+Créez un projet sur Supabase, puis exécutez le script SQL complet disponible dans le fichier [SUPABASE_MODEL.md](file:///c:/Users/Admin/OneDrive/Documents/Desktop/justalk/SUPABASE_MODEL.md) dans l'éditeur SQL de votre projet Supabase.
 
 ### 2. Modèles face-api.js
 Télécharger les modèles depuis le repo officiel face-api.js et les placer
@@ -107,7 +98,7 @@ dans `public/models/` (voir `public/models/README.txt`).
 
 ### 3. Variables d'environnement
 Copier `.env.example` → `.env.local` et renseigner :
-- Clés Firebase (Client + Admin / compte de service)
+- Clés Supabase (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`)
 - `JWT_SECRET` (chaîne aléatoire longue)
 - `WEBAUTHN_RP_ID` / `WEBAUTHN_ORIGIN` (⚠️ doivent matcher exactement le
   domaine de prod, ex: `justalk.app` / `https://justalk.app`)
@@ -115,7 +106,7 @@ Copier `.env.example` → `.env.local` et renseigner :
 ### 4. Vercel
 ```bash
 vercel link
-vercel env add ...   # toutes les variables de .env.example
+vercel env add NEXT_PUBLIC_SUPABASE_URL ...   # toutes les variables de .env.example
 vercel --prod
 ```
 > ⚠️ WebAuthn nécessite **HTTPS** (sauf `localhost`). Vérifie que
@@ -130,9 +121,9 @@ npm run dev
 
 ## 📹 Appels audio/vidéo (WebRTC)
 
-- **P2P direct** (`RTCPeerConnection`), signalisation via Firestore
-  (`calls/{id}` + sous-collections `callerCandidates`/`calleeCandidates`),
-  donc **aucun coût de serveur média** pour le streaming lui-même.
+- **P2P direct** (`RTCPeerConnection`), signalisation via Supabase (tables
+  `calls` et `call_candidates`), donc **aucun coût de serveur média** pour le
+  streaming lui-même.
 - **Qualité adaptative automatique** (`lib/bandwidth.js`) : mesure le débit
   réel toutes les 8s et choisit le meilleur profil parmi audio-only / 480p /
   720p / 1080p / **4K**.
@@ -197,7 +188,7 @@ une **PWA** (Progressive Web App) installable comme une vraie app :
 npm install -g vercel
 vercel login
 vercel        # suit les instructions, lie le dossier justalk
-vercel env add NEXT_PUBLIC_FIREBASE_API_KEY
+vercel env add NEXT_PUBLIC_SUPABASE_URL
 # ... ajoute toutes les variables de .env.example
 vercel --prod
 ```

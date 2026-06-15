@@ -9,7 +9,7 @@ import { useCurrentUser } from "@/lib/useCurrentUser";
 import { BarChart3, FileText, Eye, Heart, Users, AlertCircle } from "lucide-react";
 
 export default function DashboardPage() {
-  const { user, firebaseReady } = useCurrentUser();
+  const { user, sessionReady } = useCurrentUser();
   const [stats, setStats] = useState({
     postsCount: 0,
     totalViews: 0,
@@ -92,10 +92,10 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    if (user?.uid && firebaseReady) {
+    if (user?.uid && sessionReady) {
       loadDashboardStats();
     }
-  }, [user?.uid, firebaseReady]);
+  }, [user?.uid, sessionReady]);
 
   return (
     <div className="min-h-screen pb-16 bg-bg">

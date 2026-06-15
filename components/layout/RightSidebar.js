@@ -11,10 +11,10 @@ import { MessageSquare, Users } from "lucide-react";
 export default function RightSidebar() {
   const [members, setMembers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const { user: currentUser, firebaseReady } = useCurrentUser();
+  const { user: currentUser, sessionReady } = useCurrentUser();
 
   useEffect(() => {
-    if (!currentUser?.uid || !firebaseReady) return;
+    if (!currentUser?.uid || !sessionReady) return;
 
     async function fetchMembers() {
       const { data, error } = await supabase
@@ -54,7 +54,7 @@ export default function RightSidebar() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser?.uid, firebaseReady]);
+  }, [currentUser?.uid, sessionReady]);
 
   if (!currentUser) return null;
 

@@ -11,7 +11,7 @@ import { Heart, MessageCircle, UserPlus, Bell } from "lucide-react";
 const ICONS = { like: Heart, comment: MessageCircle, friend: UserPlus };
 
 export default function NotificationsPage() {
-  const { user, firebaseReady } = useCurrentUser();
+  const { user, sessionReady } = useCurrentUser();
   const [notifs, setNotifs] = useState([]);
 
   // Récupère les notifications depuis Supabase
@@ -41,7 +41,7 @@ export default function NotificationsPage() {
 
   // Écoute les notifications en temps réel
   useEffect(() => {
-    if (!user?.uid || !firebaseReady) return;
+    if (!user?.uid || !sessionReady) return;
 
     fetchNotifications();
 
@@ -59,7 +59,7 @@ export default function NotificationsPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user?.uid, firebaseReady]);
+  }, [user?.uid, sessionReady]);
 
   // Marque toutes les notifications non lues comme lues à l'ouverture de la page
   useEffect(() => {

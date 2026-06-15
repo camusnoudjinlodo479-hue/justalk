@@ -88,7 +88,7 @@ export default function LoginPage() {
                   Consommation Ultra-Réduite
                 </h3>
                 <p className="text-slate-500 text-xs md:text-sm leading-relaxed">
-                  Notre profil <strong className="text-electric">HD Éco-Data</strong> (15fps, AV1) est ultra sobre : seulement <strong className="text-slate-800 font-semibold">50 Mo</strong> suffisent pour <strong className="text-slate-800 font-semibold">2h à 3h d'appel</strong> !
+                  Notre profil <strong className="text-electric">HD Éco-Data</strong> (15fps, AV1) est ultra sobre : seulement <strong className="text-slate-800 font-semibold">50 Mo</strong> suffisent pour <strong className="text-slate-800 font-semibold">1h d'appel</strong> (soit ~150 Mo pour 3h) !
                 </p>
               </div>
             </div>

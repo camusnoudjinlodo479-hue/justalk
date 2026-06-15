@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { auth } from "@/lib/firebase"; // Conservé uniquement pour la déconnexion locale si requise
 import { supabase } from "@/lib/supabase";
 import EditProfileModal from "@/components/profile/EditProfileModal";
 import { Camera, Cake, Link as LinkIcon, Plus } from "lucide-react";
@@ -18,7 +17,7 @@ const TABS = ["Publications", "À propos", "Amis", "Photos"];
 export default function ProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
-  const { user: fetchedUser, firebaseReady } = useCurrentUser();
+  const { user: fetchedUser, sessionReady } = useCurrentUser();
   const [tab, setTab] = useState("Publications");
   const [editOpen, setEditOpen] = useState(false);
   const [targetUid, setTargetUid] = useState(null);
@@ -38,7 +37,6 @@ export default function ProfilePage() {
   async function handleLogout() {
     try {
       await fetch("/api/session/logout", { method: "POST" });
-      await auth.signOut().catch(() => {});
       router.push("/");
       router.refresh();
     } catch (err) {
@@ -93,7 +91,7 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
-    if (!profile?.uid || !firebaseReady) return;
+    if (!profile?.uid || !sessionReady) return;
 
     fetchProfile();
 
@@ -111,7 +109,7 @@ export default function ProfilePage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.uid, isMyProfile, firebaseReady]);
+  }, [profile?.uid, isMyProfile, sessionReady]);
 
   // Écoute des utilisateurs (pour pseudos/avatars)
   async function fetchUsers() {
@@ -130,7 +128,7 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
-    if (!firebaseReady) return;
+    if (!sessionReady) return;
 
     fetchUsers();
 
@@ -148,7 +146,7 @@ export default function ProfilePage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [firebaseReady]);
+  }, [sessionReady]);
 
   // Écoute des likes
   async function fetchMyLikes() {
@@ -168,7 +166,7 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
-    if (!fetchedUser?.uid || !firebaseReady) return;
+    if (!fetchedUser?.uid || !sessionReady) return;
 
     fetchMyLikes();
 
@@ -186,7 +184,7 @@ export default function ProfilePage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchedUser?.uid, firebaseReady]);
+  }, [fetchedUser?.uid, sessionReady]);
 
   // Écoute des membres récents pour la box Amis
   async function fetchRecentMembers() {
@@ -217,7 +215,7 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
-    if (!profile?.uid || !firebaseReady) return;
+    if (!profile?.uid || !sessionReady) return;
 
     fetchRecentMembers();
 
@@ -235,7 +233,7 @@ export default function ProfilePage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.uid, firebaseReady]);
+  }, [profile?.uid, sessionReady]);
 
   async function fetchFriendship() {
     if (!fetchedUser?.uid || !profile?.uid || isMyProfile) return;
@@ -256,7 +254,7 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
-    if (fetchedUser?.uid && profile?.uid && !isMyProfile && firebaseReady) {
+    if (fetchedUser?.uid && profile?.uid && !isMyProfile && sessionReady) {
       fetchFriendship();
       
       const channel = supabase
@@ -274,7 +272,7 @@ export default function ProfilePage() {
         supabase.removeChannel(channel);
       };
     }
-  }, [fetchedUser?.uid, profile?.uid, isMyProfile, firebaseReady]);
+  }, [fetchedUser?.uid, profile?.uid, isMyProfile, sessionReady]);
 
   async function sendFriendRequest() {
     if (!fetchedUser || !profile) return;
@@ -422,7 +420,7 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
-    if (!profile?.uid || !firebaseReady) return;
+    if (!profile?.uid || !sessionReady) return;
 
     fetchProfilePosts();
 
@@ -440,7 +438,7 @@ export default function ProfilePage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.uid, firebaseReady]);
+  }, [profile?.uid, sessionReady]);
 
   async function handleLike(postId, isLiked) {
     if (!fetchedUser) return;
