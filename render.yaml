@@ -13,3 +13,7 @@ services:
         sync: false
       - key: WEBAUTHN_ORIGIN
         sync: false
+      - key: VITE_SUPABASE_URL
+        value: https://gvihebkairntrunsbaxv.supabase.co
+      - key: VITE_SUPABASE_ANON_KEY
+        value: sb_publishable_FKgRWMHd_D3tqOc7UqP3yg_u0jVjWp4
