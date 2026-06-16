@@ -4,13 +4,17 @@
 import os
 import json
 import uuid
+import time
+from datetime import datetime, timedelta, timezone
+import urllib.request
+import urllib.error
 from dotenv import load_dotenv
 
 # Chargement du fichier .env situé à la racine du projet
 dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path=dotenv_path)
 from typing import Dict, Any, List
-from fastapi import FastAPI, Depends, HTTPException, status, Response, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Response, Request, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -56,10 +60,19 @@ WEBAUTHN_ORIGIN = os.getenv("WEBAUTHN_ORIGIN", "http://localhost:5173")
 # Dictionnaire en mémoire pour stocker les challenges temporaires (clé: username, valeur: dict challenge)
 challenges_db: Dict[str, Dict[str, Any]] = {}
 
-# Middleware CORS pour permettre au frontend React (Vite) de requêter
+# Middleware CORS pour permettre au frontend React de requêter
+cors_origins = [
+    WEBAUTHN_ORIGIN,
+    "http://localhost:5173",
+    "http://localhost:8000",
+    "https://justalk.onrender.com",
+    "https://k.onrender.com"
+]
+cors_origins = list(set([o for o in cors_origins if o]))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[WEBAUTHN_ORIGIN],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -289,12 +302,30 @@ def logout(response: Response):
 
 @app.get("/api/posts", response_model=List[schemas.PostResponse])
 def get_posts(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Liste les publications du fil d'actualité."""
+    """Liste les publications du fil d'actualité enrichies avec les likes et les commentaires."""
     posts = db.query(models.Post).order_by(models.Post.created_at.desc()).limit(50).all()
     
     response_list = []
     for post in posts:
         author = post.author
+        likes_count = len(post.likes)
+        is_liked = any(like.user_id == current_user.id for like in post.likes)
+        
+        comments_list = []
+        for comment in post.comments:
+            c_author = comment.user
+            comments_list.append(
+                schemas.CommentResponse(
+                    id=comment.id,
+                    post_id=comment.post_id,
+                    user_id=comment.user_id,
+                    content=comment.content,
+                    created_at=comment.created_at,
+                    author_username=c_author.username,
+                    author_display_name=c_author.display_name
+                )
+            )
+            
         response_list.append(
             schemas.PostResponse(
                 id=post.id,
@@ -304,7 +335,10 @@ def get_posts(db: Session = Depends(database.get_db), current_user: models.User 
                 created_at=post.created_at,
                 user_id=post.user_id,
                 author_username=author.username,
-                author_display_name=author.display_name
+                author_display_name=author.display_name,
+                likes_count=likes_count,
+                is_liked=is_liked,
+                comments=comments_list
             )
         )
     return response_list
@@ -339,8 +373,247 @@ def create_post(req: schemas.PostCreate, db: Session = Depends(database.get_db),
         created_at=db_post.created_at,
         user_id=db_post.user_id,
         author_username=current_user.username,
-        author_display_name=current_user.display_name
+        author_display_name=current_user.display_name,
+        likes_count=0,
+        is_liked=False,
+        comments=[]
     )
+
+
+# --- Endpoint Téléversement Backend (Upload) ---
+
+@app.post("/api/upload")
+async def upload_file(file: UploadFile = File(...), current_user: models.User = Depends(auth.get_current_user)):
+    """Téléverse un fichier image ou vidéo sur le stockage Supabase."""
+    supabase_url = os.getenv("VITE_SUPABASE_URL")
+    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not service_key:
+        raise HTTPException(status_code=500, detail="Configuration Supabase manquante dans le backend.")
+        
+    try:
+        contents = await file.read()
+        file_ext = file.filename.split(".")[-1]
+        file_name = f"{current_user.id}_{int(time.time())}.{file_ext}"
+        file_path = f"posts/{file_name}"
+        
+        upload_url = f"{supabase_url}/storage/v1/object/justalk/{file_path}"
+        
+        req = urllib.request.Request(upload_url, data=contents, method="POST")
+        req.add_header("apikey", service_key)
+        req.add_header("Authorization", f"Bearer {service_key}")
+        req.add_header("Content-Type", file.content_type)
+        
+        with urllib.request.urlopen(req) as res:
+            res.read()
+            
+        public_url = f"{supabase_url}/storage/v1/object/public/justalk/{file_path}"
+        return {"url": public_url}
+        
+    except urllib.error.HTTPError as e:
+        err_msg = e.read().decode("utf-8")
+        print(f"Supabase upload HTTP error: {e.code} - {err_msg}")
+        raise HTTPException(status_code=500, detail=f"Téléversement Supabase échoué: {err_msg}")
+    except Exception as e:
+        print(f"Supabase upload generic error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur de téléversement: {str(e)}")
+
+
+# --- Endpoints Stories (Stories de 24 heures) ---
+
+@app.post("/api/stories", response_model=schemas.StoryResponse)
+def create_story(req: schemas.StoryCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Crée une nouvelle story qui expire dans 24 heures."""
+    try:
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(hours=24)
+        
+        db_story = models.Story(
+            user_id=current_user.id,
+            media_url=req.media_url,
+            created_at=now,
+            expires_at=expires_at
+        )
+        db.add(db_story)
+        db.commit()
+        db.refresh(db_story)
+        
+        return schemas.StoryResponse(
+            id=db_story.id,
+            user_id=db_story.user_id,
+            media_url=db_story.media_url,
+            created_at=db_story.created_at,
+            expires_at=db_story.expires_at,
+            author_username=current_user.username,
+            author_display_name=current_user.display_name,
+            is_viewed=False
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur de création de story: {str(e)}")
+
+
+@app.get("/api/stories", response_model=List[schemas.StoryResponse])
+def get_stories(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Récupère toutes les stories actives (< 24h)."""
+    now = datetime.now(timezone.utc)
+    stories = db.query(models.Story).filter(models.Story.expires_at > now).order_by(models.Story.created_at.desc()).all()
+    
+    response_list = []
+    for story in stories:
+        author = story.author
+        is_viewed = any(view.user_id == current_user.id for view in story.views)
+        
+        response_list.append(
+            schemas.StoryResponse(
+                id=story.id,
+                user_id=story.user_id,
+                media_url=story.media_url,
+                created_at=story.created_at,
+                expires_at=story.expires_at,
+                author_username=author.username,
+                author_display_name=author.display_name,
+                is_viewed=is_viewed
+            )
+        )
+    return response_list
+
+
+@app.post("/api/stories/{story_id}/view")
+def view_story(story_id: uuid.UUID, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Marque une story comme vue par l'utilisateur connecté."""
+    existing = db.query(models.StoryView).filter(
+        models.StoryView.story_id == story_id,
+        models.StoryView.user_id == current_user.id
+    ).first()
+    
+    if not existing:
+        try:
+            db_view = models.StoryView(
+                story_id=story_id,
+                user_id=current_user.id
+            )
+            db.add(db_view)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            pass
+            
+    return {"status": "success"}
+
+
+# --- Endpoints Likes & Commentaires ---
+
+@app.post("/api/likes")
+def toggle_like(req: schemas.LikeCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Ajoute ou supprime un J'aime sur un post (toggle)."""
+    existing = db.query(models.Like).filter(
+        models.Like.post_id == req.post_id,
+        models.Like.user_id == current_user.id
+    ).first()
+    
+    try:
+        if existing:
+            db.delete(existing)
+            db.commit()
+            action = "unliked"
+        else:
+            db_like = models.Like(
+                post_id=req.post_id,
+                user_id=current_user.id
+            )
+            db.add(db_like)
+            
+            post = db.query(models.Post).filter(models.Post.id == req.post_id).first()
+            if post and post.user_id != current_user.id:
+                db_notif = models.Notification(
+                    user_id=post.user_id,
+                    content=f"@{current_user.username} a aimé votre publication."
+                )
+                db.add(db_notif)
+                
+            db.commit()
+            action = "liked"
+            
+        return {"status": "success", "action": action}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur d'action Like: {str(e)}")
+
+
+@app.post("/api/comments", response_model=schemas.CommentResponse)
+def create_comment(req: schemas.CommentCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Ajoute un commentaire à un post."""
+    content = req.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Le commentaire ne peut pas être vide.")
+        
+    try:
+        db_comment = models.Comment(
+            post_id=req.post_id,
+            user_id=current_user.id,
+            content=content
+        )
+        db.add(db_comment)
+        
+        post = db.query(models.Post).filter(models.Post.id == req.post_id).first()
+        if post and post.user_id != current_user.id:
+            db_notif = models.Notification(
+                user_id=post.user_id,
+                content=f"@{current_user.username} a commenté votre publication."
+            )
+            db.add(db_notif)
+            
+        db.commit()
+        db.refresh(db_comment)
+        
+        return schemas.CommentResponse(
+            id=db_comment.id,
+            post_id=db_comment.post_id,
+            user_id=db_comment.user_id,
+            content=db_comment.content,
+            created_at=db_comment.created_at,
+            author_username=current_user.username,
+            author_display_name=current_user.display_name
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur d'enregistrement du commentaire: {str(e)}")
+
+
+# --- Endpoint Notifications ---
+
+@app.get("/api/notifications/unread_count")
+def get_unread_notifications_count(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Renvoie le nombre de notifications non lues pour l'utilisateur connecté."""
+    count = db.query(models.Notification).filter(
+        models.Notification.user_id == current_user.id,
+        models.Notification.is_read == False
+    ).count()
+    return {"unread_count": count}
+
+
+@app.get("/api/notifications", response_model=List[schemas.NotificationResponse])
+def get_notifications(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Récupère les 20 dernières notifications et les marque comme lues."""
+    notifs = db.query(models.Notification).filter(
+        models.Notification.user_id == current_user.id
+    ).order_by(models.Notification.created_at.desc()).limit(20).all()
+    
+    # Marquer comme lues
+    for notif in notifs:
+        notif.is_read = True
+    db.commit()
+    
+    return [
+        schemas.NotificationResponse(
+            id=n.id,
+            user_id=n.user_id,
+            content=n.content,
+            is_read=n.is_read,
+            created_at=n.created_at
+        )
+        for n in notifs
+    ]
 
 
 # Montage du dossier frontend/dist pour servir les fichiers statiques de React

@@ -4,7 +4,7 @@ services:
     runtime: docker
     envVars:
       - key: DATABASE_URL
-        value: postgresql://postgres.gvihebkairntrunsbaxv:Camuse33%4055@aws-1-eu-central-1.pooler.supabase.com:6543/postgres
+        value: postgresql://postgres.gvihebkairntrunsbaxv:Camuse33%4055@aws-1-eu-central-1.pooler.supabase.com:5432/postgres
       - key: JWT_SECRET
         value: justalk-secret-session-key-random-123456789-python-fastapi
       - key: WEBAUTHN_RP_NAME

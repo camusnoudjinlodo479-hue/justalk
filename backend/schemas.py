@@ -4,7 +4,7 @@
 from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 # --- WebAuthn Schemas ---
 
@@ -42,6 +42,19 @@ class PostCreate(BaseModel):
     image_url: Optional[str] = None
     video_url: Optional[str] = None
 
+
+class CommentResponse(BaseModel):
+    id: UUID
+    post_id: UUID
+    user_id: UUID
+    content: str
+    created_at: datetime
+    author_username: str
+    author_display_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PostResponse(BaseModel):
     id: UUID
     content: Optional[str] = None
@@ -51,5 +64,51 @@ class PostResponse(BaseModel):
     user_id: UUID
     author_username: str
     author_display_name: Optional[str] = None
+    likes_count: int = 0
+    is_liked: bool = False
+    comments: List[CommentResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Comment & Like Request Schemas ---
+
+class CommentCreate(BaseModel):
+    post_id: UUID
+    content: str
+
+
+class LikeCreate(BaseModel):
+    post_id: UUID
+
+
+# --- Story Schemas ---
+
+class StoryCreate(BaseModel):
+    media_url: str
+
+
+class StoryResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    media_url: str
+    created_at: datetime
+    expires_at: datetime
+    author_username: str
+    author_display_name: Optional[str] = None
+    is_viewed: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# --- Notification Schemas ---
+
+class NotificationResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    content: str
+    is_read: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
