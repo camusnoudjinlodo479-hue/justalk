@@ -616,6 +616,109 @@ def get_notifications(db: Session = Depends(database.get_db), current_user: mode
     ]
 
 
+# --- Endpoints Amis Réels ---
+
+@app.get("/api/users", response_model=List[schemas.UserSearchResponse])
+def get_users_list(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Liste tous les utilisateurs enregistrés (sauf soi-même) avec le statut d'amitié."""
+    friendships = db.query(models.Friendship).filter(
+        (models.Friendship.user_id == current_user.id) | (models.Friendship.friend_id == current_user.id)
+    ).all()
+    
+    friend_status = {}
+    for f in friendships:
+        other_id = f.friend_id if f.user_id == current_user.id else f.user_id
+        friend_status[other_id] = f.status
+        
+    users = db.query(models.User).filter(models.User.id != current_user.id).all()
+    
+    results = []
+    for u in users:
+        status = friend_status.get(u.id)
+        is_friend = (status == "accepted")
+        is_pending = (status == "pending")
+        results.append(
+            schemas.UserSearchResponse(
+                id=u.id,
+                username=u.username,
+                display_name=u.display_name,
+                is_friend=is_friend,
+                is_pending=is_pending
+            )
+        )
+    return results
+
+
+@app.post("/api/friends")
+def toggle_friendship(req: schemas.FriendshipRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Ajoute ou supprime une relation d'amitié (toggle)."""
+    if req.friend_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Vous ne pouvez pas vous ajouter vous-même en ami.")
+        
+    friend_user = db.query(models.User).filter(models.User.id == req.friend_id).first()
+    if not friend_user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé.")
+        
+    existing = db.query(models.Friendship).filter(
+        ((models.Friendship.user_id == current_user.id) & (models.Friendship.friend_id == req.friend_id)) |
+        ((models.Friendship.user_id == req.friend_id) & (models.Friendship.friend_id == current_user.id))
+    ).first()
+    
+    try:
+        if existing:
+            db.delete(existing)
+            db.commit()
+            action = "removed"
+        else:
+            db_friendship = models.Friendship(
+                user_id=current_user.id,
+                friend_id=req.friend_id,
+                status="accepted"
+            )
+            db.add(db_friendship)
+            
+            db_notif = models.Notification(
+                user_id=req.friend_id,
+                content=f"@{current_user.username} vous a ajouté en ami !"
+            )
+            db.add(db_notif)
+            
+            db.commit()
+            action = "added"
+            
+        return {"status": "success", "action": action}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur d'action amitié: {str(e)}")
+
+
+@app.get("/api/friends", response_model=List[schemas.UserResponse])
+def get_friends(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Récupère la liste de tous les amis acceptés de l'utilisateur connecté."""
+    friendships = db.query(models.Friendship).filter(
+        ((models.Friendship.user_id == current_user.id) | (models.Friendship.friend_id == current_user.id)) &
+        (models.Friendship.status == "accepted")
+    ).all()
+    
+    friend_ids = []
+    for f in friendships:
+        other_id = f.friend_id if f.user_id == current_user.id else f.user_id
+        friend_ids.append(other_id)
+        
+    if not friend_ids:
+        return []
+        
+    friends = db.query(models.User).filter(models.User.id.in_(friend_ids)).all()
+    return [
+        schemas.UserResponse(
+            id=f.id,
+            username=f.username,
+            display_name=f.display_name
+        )
+        for f in friends
+    ]
+
+
 # Montage du dossier frontend/dist pour servir les fichiers statiques de React
 frontend_dist_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 

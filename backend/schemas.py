@@ -112,3 +112,19 @@ class NotificationResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+# --- Friendship Schemas ---
+
+class FriendshipRequest(BaseModel):
+    friend_id: UUID
+
+
+class UserSearchResponse(BaseModel):
+    id: UUID
+    username: str
+    display_name: Optional[str] = None
+    is_friend: bool = False
+    is_pending: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+

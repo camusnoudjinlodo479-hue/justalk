@@ -45,6 +45,17 @@ export default function Feed({ currentUser, onLogout }) {
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [showMessagesModal, setShowMessagesModal] = useState(false);
 
+  // États de la modale Amis Réels
+  const [friendsList, setFriendsList] = useState([]);
+  const [activeTab, setActiveTab] = useState("my-friends");
+  const [loadingFriends, setLoadingFriends] = useState(false);
+  const [actioningFriendId, setActioningFriendId] = useState(null);
+
+  const showFriendsModalRef = useRef(showFriendsModal);
+  useEffect(() => {
+    showFriendsModalRef.current = showFriendsModal;
+  }, [showFriendsModal]);
+
   // États des Stories
   const [uploadingStory, setUploadingStory] = useState(false);
   const [selectedStory, setSelectedStory] = useState(null); // Story active dans le viewer
@@ -137,6 +148,64 @@ export default function Feed({ currentUser, onLogout }) {
     }
   };
 
+  // Charger la liste des utilisateurs réels (amis et autres)
+  const fetchUsersList = async () => {
+    setLoadingFriends(true);
+    try {
+      const res = await fetch("/api/users");
+      if (res.ok) {
+        const data = await res.json();
+        setFriendsList(data);
+      }
+    } catch (err) {
+      console.error("Erreur de chargement des utilisateurs :", err);
+    } finally {
+      setLoadingFriends(false);
+    }
+  };
+
+  const handleToggleFriendship = async (friendId) => {
+    setActioningFriendId(friendId);
+    try {
+      const res = await fetch("/api/friends", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friend_id: friendId }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setFriendsList((prev) =>
+          prev.map((u) => {
+            if (u.id === friendId) {
+              const isAdded = result.action === "added";
+              return { ...u, is_friend: isAdded };
+            }
+            return u;
+          })
+        );
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.detail || "Erreur de mise à jour d'amitié.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erreur réseau.");
+    } finally {
+      setActioningFriendId(null);
+    }
+  };
+
+  const fetchUsersListRef = useRef(null);
+  useEffect(() => {
+    fetchUsersListRef.current = fetchUsersList;
+  });
+
+  useEffect(() => {
+    if (showFriendsModal) {
+      fetchUsersList();
+    }
+  }, [showFriendsModal]);
+
   // --- Initialisation et Realtime ---
   useEffect(() => {
     fetchPosts();
@@ -185,6 +254,15 @@ export default function Feed({ currentUser, onLogout }) {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "notifications" },
         () => fetchUnreadCount()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "friendships" },
+        () => {
+          if (showFriendsModalRef.current && fetchUsersListRef.current) {
+            fetchUsersListRef.current();
+          }
+        }
       )
       .subscribe();
 
@@ -1039,29 +1117,108 @@ export default function Feed({ currentUser, onLogout }) {
                 <X size={15} />
               </button>
             </div>
+            
+            {/* Onglets d'amis */}
+            <div className="flex border-b border-slate-100 bg-slate-50/25">
+              <button
+                onClick={() => setActiveTab("my-friends")}
+                className={`flex-1 py-3 text-xs font-bold transition-all border-b-2 ${
+                  activeTab === "my-friends"
+                    ? "border-blue-600 text-blue-600 bg-white"
+                    : "border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50/50"
+                }`}
+              >
+                Mes Amis ({friendsList.filter((u) => u.is_friend).length})
+              </button>
+              <button
+                onClick={() => setActiveTab("find-friends")}
+                className={`flex-1 py-3 text-xs font-bold transition-all border-b-2 ${
+                  activeTab === "find-friends"
+                    ? "border-blue-600 text-blue-600 bg-white"
+                    : "border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50/50"
+                }`}
+              >
+                Trouver des amis ({friendsList.filter((u) => !u.is_friend).length})
+              </button>
+            </div>
+
             <div className="p-4 max-h-80 overflow-y-auto flex flex-col gap-3">
-              {[
-                { name: "Maxime Dubois", handle: "@maxime", online: true },
-                { name: "Léa Martin", handle: "@lea", online: false },
-                { name: "Antoine Laurent", handle: "@antoine", online: true },
-                { name: "Chloé Petit", handle: "@chloe", online: false }
-              ].map((f, i) => (
-                <div key={i} className="flex justify-between items-center p-1">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs relative text-slate-600 shadow-inner">
-                      {f.name[0]}
-                      {f.online && <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 border-2 border-white" />}
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">{f.name}</p>
-                      <p className="text-[9px] text-slate-400">@{f.handle}</p>
-                    </div>
-                  </div>
-                  <button className="px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-blue-50 hover:text-blue-600 font-bold text-[9px] text-slate-600 transition-colors">
-                    Message
-                  </button>
+              {loadingFriends ? (
+                <div className="flex flex-col items-center justify-center py-8 text-slate-400 gap-2">
+                  <Loader2 className="animate-spin text-blue-600" size={20} />
+                  <span className="text-[10px] font-medium">Chargement...</span>
                 </div>
-              ))}
+              ) : (
+                <>
+                  {activeTab === "my-friends" ? (
+                    friendsList.filter((u) => u.is_friend).length > 0 ? (
+                      friendsList
+                        .filter((u) => u.is_friend)
+                        .map((f) => (
+                          <div key={f.id} className="flex justify-between items-center p-1">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                                {f.display_name?.[0]?.toUpperCase() || f.username?.[0]?.toUpperCase() || "U"}
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-800 leading-snug">{f.display_name || f.username}</p>
+                                <p className="text-[9px] text-slate-400 leading-none">@{f.username}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleToggleFriendship(f.id)}
+                              disabled={actioningFriendId === f.id}
+                              className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] transition-colors flex items-center justify-center gap-1 disabled:opacity-50 min-w-[65px]"
+                            >
+                              {actioningFriendId === f.id ? (
+                                <Loader2 size={10} className="animate-spin" />
+                              ) : (
+                                "Retirer"
+                              )}
+                            </button>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="text-center py-8 text-slate-400 text-xs">
+                        Vous n'avez pas encore d'amis.
+                      </div>
+                    )
+                  ) : (
+                    friendsList.filter((u) => !u.is_friend).length > 0 ? (
+                      friendsList
+                        .filter((u) => !u.is_friend)
+                        .map((f) => (
+                          <div key={f.id} className="flex justify-between items-center p-1">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-xs shadow-inner">
+                                {f.display_name?.[0]?.toUpperCase() || f.username?.[0]?.toUpperCase() || "U"}
+                              </div>
+                              <div>
+                                <p className="text-xs font-bold text-slate-800 leading-snug">{f.display_name || f.username}</p>
+                                <p className="text-[9px] text-slate-400 leading-none">@{f.username}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleToggleFriendship(f.id)}
+                              disabled={actioningFriendId === f.id}
+                              className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] transition-colors flex items-center justify-center gap-1 disabled:opacity-50 min-w-[65px]"
+                            >
+                              {actioningFriendId === f.id ? (
+                                <Loader2 size={10} className="animate-spin" />
+                              ) : (
+                                "Ajouter"
+                              )}
+                            </button>
+                          </div>
+                        ))
+                    ) : (
+                      <div className="text-center py-8 text-slate-400 text-xs">
+                        Aucun autre utilisateur trouvé.
+                      </div>
+                    )
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

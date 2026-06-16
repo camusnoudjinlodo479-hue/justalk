@@ -126,3 +126,21 @@ class Notification(Base):
     # Relation
     user = relationship("User", back_populates="notifications")
 
+
+class Friendship(Base):
+    __tablename__ = "friendships"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    friend_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    status = Column(String(50), nullable=False, default="accepted")  # accepted | pending
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Contrainte d'unicité pour éviter les relations en doublon
+    __table_args__ = (UniqueConstraint("user_id", "friend_id", name="_user_friend_uc"),)
+
+    # Relations (avec clés étrangères explicites car deux liaisons vers la même table)
+    user = relationship("User", foreign_keys=[user_id])
+    friend = relationship("User", foreign_keys=[friend_id])
+
+
