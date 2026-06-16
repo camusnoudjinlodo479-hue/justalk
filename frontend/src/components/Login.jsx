@@ -41,7 +41,7 @@ export default function Login({ onLoginSuccess, onGoToRegister }) {
       const options = await optionsRes.json();
 
       // 2. Lancement de la reconnaissance biométrique native via @github/webauthn-json
-      const assertion = await get(options);
+      const assertion = await get({ publicKey: options });
 
       // 3. Envoi de l'assertion de signature au backend pour vérification
       const verifyRes = await fetch("/api/webauthn/login-verify", {

@@ -47,7 +47,7 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
 
       // 2. Déclenchement de la biométrie via @github/webauthn-json
       // create() prend en charge toute la sérialisation/désérialisation du protocole
-      const attestation = await create(options);
+      const attestation = await create({ publicKey: options });
 
       // 3. Envoi de la réponse au backend pour validation finale
       const verifyRes = await fetch("/api/webauthn/register-verify", {
