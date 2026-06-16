@@ -6,3 +6,20 @@ node_modules
 firebase-debug.log
 .firebase
 out
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Frontend React
+frontend/node_modules/
+frontend/dist/
+frontend/src/assets/temp/
+
+# Logs et OS
+*.log
+.DS_Store
+Thumbs.db
