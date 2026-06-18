@@ -7,13 +7,7 @@ export function triggerConfetti() {
   if (!canvas) {
     canvas = document.createElement("canvas");
     canvas.id = "confetti-canvas";
-    canvas.style.position = "fixed";
-    canvas.style.top = "0";
-    canvas.style.left = "0";
-    canvas.style.width = "100vw";
-    canvas.style.height = "100vh";
-    canvas.style.zIndex = "9999";
-    canvas.style.pointerEvents = "none";
+    canvas.style.cssText = "position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 99999 !important; pointer-events: none !important; margin: 0 !important; padding: 0 !important; background: transparent !important;";
     document.body.appendChild(canvas);
   }
 
