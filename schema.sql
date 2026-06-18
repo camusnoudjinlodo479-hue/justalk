@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     username VARCHAR(255) UNIQUE NOT NULL,
     display_name VARCHAR(255),
     avatar_url VARCHAR(2048),
+    cover_url VARCHAR(2048),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
