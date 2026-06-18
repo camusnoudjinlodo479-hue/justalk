@@ -15,6 +15,7 @@ class User(Base):
     username = Column(String(255), unique=True, nullable=False, index=True)
     display_name = Column(String(255), nullable=True)
     avatar_url = Column(String(2048), nullable=True)
+    cover_url = Column(String(2048), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relations
@@ -126,6 +127,48 @@ class Notification(Base):
 
     # Relation
     user = relationship("User", back_populates="notifications")
+
+
+class Reel(Base):
+    __tablename__ = "reels"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    video_url = Column(String(2048), nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relations
+    author = relationship("User")
+    likes = relationship("ReelLike", back_populates="reel", cascade="all, delete-orphan")
+    comments = relationship("ReelComment", back_populates="reel", cascade="all, delete-orphan")
+
+
+class ReelLike(Base):
+    __tablename__ = "reel_likes"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    reel_id = Column(UUID(as_uuid=True), ForeignKey("reels.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("reel_id", "user_id", name="_reel_user_like_uc"),)
+
+    reel = relationship("Reel", back_populates="likes")
+    user = relationship("User")
+
+
+class ReelComment(Base):
+    __tablename__ = "reel_comments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    reel_id = Column(UUID(as_uuid=True), ForeignKey("reels.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    reel = relationship("Reel", back_populates="comments")
+    user = relationship("User")
 
 
 class Friendship(Base):

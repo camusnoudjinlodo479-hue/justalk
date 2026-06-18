@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { create } from "@github/webauthn-json";
-import { User, ScanFace, ArrowRight, ShieldCheck, AlertCircle } from "lucide-react";
+import { User, ScanFace, ArrowRight, ShieldCheck, AlertCircle, Mic } from "lucide-react";
 
 export default function Register({ onRegisterSuccess, onGoToLogin }) {
   const [username, setUsername] = useState("");
@@ -11,6 +11,60 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  const [isListeningUsername, setIsListeningUsername] = useState(false);
+  const [isListeningDisplayName, setIsListeningDisplayName] = useState(false);
+
+  const startVoiceInput = (field) => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("La reconnaissance vocale n'est pas supportée par votre navigateur.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "fr-FR";
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    if (field === "username") {
+      setIsListeningUsername(true);
+    } else {
+      setIsListeningDisplayName(true);
+    }
+
+    recognition.start();
+
+    recognition.onresult = (event) => {
+      const speechToText = event.results[0][0].transcript;
+      if (field === "username") {
+        const cleanVal = speechToText
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/\s+/g, "")
+          .replace(/[^a-zA-Z0-9]/g, "") // Enlever caractères spéciaux pour pseudo
+          .toLowerCase();
+        setUsername(cleanVal);
+      } else {
+        setDisplayName(speechToText);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Erreur SpeechRecognition:", event.error);
+      if (event.error !== "no-speech") {
+        alert("Erreur lors de l'écoute. Veuillez autoriser le microphone.");
+      }
+    };
+
+    recognition.onend = () => {
+      if (field === "username") {
+        setIsListeningUsername(false);
+      } else {
+        setIsListeningDisplayName(false);
+      }
+    };
+  };
 
   const handleRegister = async (e) => {
     e.preventDefault();
@@ -46,7 +100,6 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
       const options = await optionsRes.json();
 
       // 2. Déclenchement de la biométrie via @github/webauthn-json
-      // create() prend en charge toute la sérialisation/désérialisation du protocole
       const attestation = await create({ publicKey: options });
 
       // 3. Envoi de la réponse au backend pour validation finale
@@ -67,8 +120,8 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
 
       const verifyData = await verifyRes.json();
       setSuccess(true);
+      window.triggerConfetti?.();
       
-      // Petit délai pour l'animation de succès avant de basculer
       setTimeout(() => {
         onRegisterSuccess(verifyData.user_id, cleanUsername);
       }, 1000);
@@ -83,11 +136,10 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
 
   return (
     <div className="w-full max-w-md p-8 card-lg bg-white/95 backdrop-blur-md relative overflow-hidden">
-      {/* Ligne décorative dégradée premium */}
-      <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-electric via-blue-500 to-indigo-500" />
+      <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
       
       <div className="flex flex-col items-center text-center gap-5">
-        <div className="w-16 h-16 rounded-full bg-electric/10 flex items-center justify-center text-electric animate-pulseRing relative mb-2">
+        <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 animate-pulseRing relative mb-2">
           <ScanFace size={32} />
         </div>
 
@@ -106,10 +158,23 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
               placeholder="Pseudo (ex: antoine)"
               value={username}
               onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))}
-              className="input-pill pl-12"
+              className="input-pill pl-12 pr-12"
               required
               disabled={loading || success}
             />
+            <button
+              type="button"
+              onClick={() => startVoiceInput("username")}
+              className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full transition-all ${
+                isListeningUsername 
+                  ? "bg-red-500 text-white animate-micPulse" 
+                  : "text-slate-400 hover:text-blue-500 hover:bg-slate-100"
+              }`}
+              disabled={loading || success}
+              title="Dicter le pseudo"
+            >
+              <Mic size={15} />
+            </button>
           </div>
 
           <div className="relative">
@@ -119,9 +184,22 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
               placeholder="Nom complet (ex: Antoine L.)"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="input-pill pl-12"
+              className="input-pill pl-12 pr-12"
               disabled={loading || success}
             />
+            <button
+              type="button"
+              onClick={() => startVoiceInput("display_name")}
+              className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-full transition-all ${
+                isListeningDisplayName 
+                  ? "bg-red-500 text-white animate-micPulse" 
+                  : "text-slate-400 hover:text-blue-500 hover:bg-slate-100"
+              }`}
+              disabled={loading || success}
+              title="Dicter le nom complet"
+            >
+              <Mic size={15} />
+            </button>
           </div>
 
           {error && (
@@ -153,7 +231,7 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
             Déjà inscrit ?{" "}
             <button
               onClick={onGoToLogin}
-              className="text-electric font-bold hover:underline"
+              className="text-blue-600 font-bold hover:underline"
               disabled={loading || success}
             >
               Se connecter ici
@@ -164,3 +242,4 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
     </div>
   );
 }
+

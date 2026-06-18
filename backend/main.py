@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 dotenv_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path=dotenv_path)
 from typing import Dict, Any, List
-from fastapi import FastAPI, Depends, HTTPException, status, Response, Request, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, status, Response, Request, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -59,6 +59,48 @@ app = FastAPI(title="Justalk API", version="1.0.0", lifespan=lifespan)
 def health_check():
     """Endpoint de vérification de santé pour Render et les outils de monitoring."""
     return {"status": "ok", "service": "justalk-api"}
+
+
+@app.get("/api/health")
+def health_check():
+    """Endpoint de vérification de santé pour Render et les outils de monitoring."""
+    return {"status": "ok", "service": "justalk-api"}
+
+
+# --- WebSocket Signaling pour WebRTC (Appels Audio/Vidéo) ---
+
+active_call_rooms: Dict[str, List[WebSocket]] = {}
+
+@app.websocket("/ws/call/{room_id}")
+async def websocket_call_endpoint(websocket: WebSocket, room_id: str):
+    """Serveur de signalisation WebRTC pour les appels audio/vidéo (1-to-1 et groupe)."""
+    await websocket.accept()
+    if room_id not in active_call_rooms:
+        active_call_rooms[room_id] = []
+    active_call_rooms[room_id].append(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            # Diffuser le message à tous les autres participants du salon
+            for conn in active_call_rooms.get(room_id, []):
+                if conn != websocket:
+                    try:
+                        await conn.send_text(data)
+                    except Exception:
+                        pass
+    except WebSocketDisconnect:
+        if room_id in active_call_rooms:
+            active_call_rooms[room_id] = [c for c in active_call_rooms[room_id] if c != websocket]
+            if not active_call_rooms[room_id]:
+                del active_call_rooms[room_id]
+            # Notifier les autres que quelqu'un a quitté
+            import json as _json
+            leave_msg = _json.dumps({"type": "peer-left"})
+            for conn in active_call_rooms.get(room_id, []):
+                try:
+                    await conn.send_text(leave_msg)
+                except Exception:
+                    pass
 
 
 # Récupération des configurations d'environnement
@@ -291,10 +333,16 @@ def verify_login(req: schemas.AuthenticationVerificationRequest, response: Respo
 
 # --- Sessions et Infos Utilisateurs ---
 
-@app.get("/api/auth/me", response_model=schemas.UserResponse)
+@app.get("/api/auth/me")
 def get_me(current_user: models.User = Depends(auth.get_current_user)):
     """Renvoie les informations de l'utilisateur connecté."""
-    return current_user
+    return {
+        "id": str(current_user.id),
+        "username": current_user.username,
+        "display_name": current_user.display_name,
+        "avatar_url": current_user.avatar_url,
+        "cover_url": current_user.cover_url,
+    }
 
 
 @app.post("/api/auth/logout")
@@ -332,7 +380,8 @@ def get_posts(db: Session = Depends(database.get_db), current_user: models.User 
                     content=comment.content,
                     created_at=comment.created_at,
                     author_username=c_author.username,
-                    author_display_name=c_author.display_name
+                    author_display_name=c_author.display_name,
+                    author_avatar_url=c_author.avatar_url
                 )
             )
             
@@ -346,6 +395,7 @@ def get_posts(db: Session = Depends(database.get_db), current_user: models.User 
                 user_id=post.user_id,
                 author_username=author.username,
                 author_display_name=author.display_name,
+                author_avatar_url=author.avatar_url,
                 likes_count=likes_count,
                 is_liked=is_liked,
                 comments=comments_list
@@ -836,6 +886,141 @@ def update_avatar(req: schemas.AvatarUpdateRequest, db: Session = Depends(databa
         raise HTTPException(status_code=500, detail=f"Erreur de mise à jour de l'avatar: {str(e)}")
 
 
+@app.post("/api/auth/profile/cover")
+def update_cover(req: schemas.CoverUpdateRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Met à jour la photo de couverture de l'utilisateur connecté."""
+    try:
+        current_user.cover_url = req.cover_url
+        db.commit()
+        return {"status": "success", "cover_url": current_user.cover_url}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur de mise à jour de la couverture: {str(e)}")
+
+
+# --- Endpoints Reels ---
+
+@app.post("/api/reels", response_model=schemas.ReelResponse)
+def create_reel(req: schemas.ReelCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Crée un nouveau Reel vidéo."""
+    try:
+        db_reel = models.Reel(
+            user_id=current_user.id,
+            video_url=req.video_url,
+            description=req.description
+        )
+        db.add(db_reel)
+        db.commit()
+        db.refresh(db_reel)
+        return schemas.ReelResponse(
+            id=db_reel.id,
+            user_id=db_reel.user_id,
+            video_url=db_reel.video_url,
+            description=db_reel.description,
+            created_at=db_reel.created_at,
+            author_username=current_user.username,
+            author_display_name=current_user.display_name,
+            author_avatar_url=current_user.avatar_url,
+            likes_count=0,
+            is_liked=False,
+            comments_count=0,
+            comments=[]
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur de création du reel: {str(e)}")
+
+
+@app.get("/api/reels", response_model=List[schemas.ReelResponse])
+def get_reels(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Récupère tous les reels triés par date décroissante."""
+    reels = db.query(models.Reel).order_by(models.Reel.created_at.desc()).limit(50).all()
+    result = []
+    for reel in reels:
+        author = reel.author
+        likes_count = len(reel.likes)
+        is_liked = any(like.user_id == current_user.id for like in reel.likes)
+        comments_list = [
+            schemas.ReelCommentResponse(
+                id=c.id,
+                reel_id=c.reel_id,
+                user_id=c.user_id,
+                content=c.content,
+                created_at=c.created_at,
+                author_username=c.user.username,
+                author_display_name=c.user.display_name,
+                author_avatar_url=c.user.avatar_url
+            ) for c in reel.comments
+        ]
+        result.append(schemas.ReelResponse(
+            id=reel.id,
+            user_id=reel.user_id,
+            video_url=reel.video_url,
+            description=reel.description,
+            created_at=reel.created_at,
+            author_username=author.username,
+            author_display_name=author.display_name,
+            author_avatar_url=author.avatar_url,
+            likes_count=likes_count,
+            is_liked=is_liked,
+            comments_count=len(reel.comments),
+            comments=comments_list
+        ))
+    return result
+
+
+@app.post("/api/reels/{reel_id}/like")
+def toggle_reel_like(reel_id: uuid.UUID, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Toggle like sur un Reel."""
+    existing = db.query(models.ReelLike).filter(
+        models.ReelLike.reel_id == reel_id,
+        models.ReelLike.user_id == current_user.id
+    ).first()
+    try:
+        if existing:
+            db.delete(existing)
+            db.commit()
+            return {"status": "success", "action": "unliked"}
+        else:
+            db_like = models.ReelLike(reel_id=reel_id, user_id=current_user.id)
+            db.add(db_like)
+            db.commit()
+            return {"status": "success", "action": "liked"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur like reel: {str(e)}")
+
+
+@app.post("/api/reels/{reel_id}/comment", response_model=schemas.ReelCommentResponse)
+def comment_reel(reel_id: uuid.UUID, req: schemas.ReelCommentCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Ajoute un commentaire sur un Reel."""
+    content = req.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Commentaire vide.")
+    try:
+        db_comment = models.ReelComment(
+            reel_id=reel_id,
+            user_id=current_user.id,
+            content=content
+        )
+        db.add(db_comment)
+        db.commit()
+        db.refresh(db_comment)
+        return schemas.ReelCommentResponse(
+            id=db_comment.id,
+            reel_id=db_comment.reel_id,
+            user_id=db_comment.user_id,
+            content=db_comment.content,
+            created_at=db_comment.created_at,
+            author_username=current_user.username,
+            author_display_name=current_user.display_name,
+            author_avatar_url=current_user.avatar_url
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur commentaire reel: {str(e)}")
+
+
 # --- Endpoints Messenger ---
 
 @app.get("/api/conversations", response_model=List[schemas.ConversationResponse])
@@ -862,6 +1047,7 @@ def get_conversations(db: Session = Depends(database.get_db), current_user: mode
                 user_two_id=c.user_two_id,
                 recipient_username=recipient.username,
                 recipient_display_name=recipient.display_name,
+                recipient_avatar_url=recipient.avatar_url,
                 last_message_content=last_msg.content if last_msg else None,
                 last_message_time=last_msg.created_at if last_msg else None,
                 last_message_sender_id=last_msg.sender_id if last_msg else None,
@@ -911,6 +1097,7 @@ def create_conversation(req: schemas.ConversationCreate, db: Session = Depends(d
             user_two_id=existing.user_two_id,
             recipient_username=recipient.username,
             recipient_display_name=recipient.display_name,
+            recipient_avatar_url=recipient.avatar_url,
             last_message_content=last_msg.content if last_msg else None,
             last_message_time=last_msg.created_at if last_msg else None,
             last_message_sender_id=last_msg.sender_id if last_msg else None,
@@ -933,6 +1120,7 @@ def create_conversation(req: schemas.ConversationCreate, db: Session = Depends(d
             user_two_id=new_conv.user_two_id,
             recipient_username=recipient.username,
             recipient_display_name=recipient.display_name,
+            recipient_avatar_url=recipient.avatar_url,
             last_message_content=None,
             last_message_time=None,
             last_message_sender_id=None,

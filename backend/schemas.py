@@ -1,13 +1,10 @@
 # backend/schemas.py
-# Modèles de validation Pydantic pour les requêtes et réponses de l'API.
-
 from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 # --- WebAuthn Schemas ---
-
 class RegistrationOptionsRequest(BaseModel):
     username: str
     display_name: Optional[str] = None
@@ -16,34 +13,29 @@ class RegistrationVerificationRequest(BaseModel):
     username: str
     display_name: Optional[str] = None
     avatar_url: Optional[str] = None
-    registration_response: Dict[str, Any]  # Reçu du frontend (@github/webauthn-json)
+    registration_response: Dict[str, Any]
 
 class AuthenticationOptionsRequest(BaseModel):
     username: str
 
 class AuthenticationVerificationRequest(BaseModel):
     username: str
-    authentication_response: Dict[str, Any]  # Reçu du frontend (@github/webauthn-json)
-
+    authentication_response: Dict[str, Any]
 
 # --- User Schemas ---
-
 class UserResponse(BaseModel):
     id: UUID
     username: str
     display_name: Optional[str] = None
     avatar_url: Optional[str] = None
-
+    cover_url: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
-
 # --- Post Schemas ---
-
 class PostCreate(BaseModel):
     content: Optional[str] = None
     image_url: Optional[str] = None
     video_url: Optional[str] = None
-
 
 class CommentResponse(BaseModel):
     id: UUID
@@ -53,9 +45,8 @@ class CommentResponse(BaseModel):
     created_at: datetime
     author_username: str
     author_display_name: Optional[str] = None
-
+    author_avatar_url: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
-
 
 class PostResponse(BaseModel):
     id: UUID
@@ -66,29 +57,22 @@ class PostResponse(BaseModel):
     user_id: UUID
     author_username: str
     author_display_name: Optional[str] = None
+    author_avatar_url: Optional[str] = None
     likes_count: int = 0
     is_liked: bool = False
     comments: List[CommentResponse] = []
-
     model_config = ConfigDict(from_attributes=True)
-
-
-# --- Comment & Like Request Schemas ---
 
 class CommentCreate(BaseModel):
     post_id: UUID
     content: str
 
-
 class LikeCreate(BaseModel):
     post_id: UUID
 
-
 # --- Story Schemas ---
-
 class StoryCreate(BaseModel):
     media_url: str
-
 
 class StoryResponse(BaseModel):
     id: UUID
@@ -98,28 +82,22 @@ class StoryResponse(BaseModel):
     expires_at: datetime
     author_username: str
     author_display_name: Optional[str] = None
+    author_avatar_url: Optional[str] = None
     is_viewed: bool = False
-
     model_config = ConfigDict(from_attributes=True)
 
-
 # --- Notification Schemas ---
-
 class NotificationResponse(BaseModel):
     id: UUID
     user_id: UUID
     content: str
     is_read: bool
     created_at: datetime
-
     model_config = ConfigDict(from_attributes=True)
 
-
 # --- Friendship Schemas ---
-
 class FriendshipRequest(BaseModel):
     friend_id: UUID
-
 
 class UserSearchResponse(BaseModel):
     id: UUID
@@ -129,18 +107,14 @@ class UserSearchResponse(BaseModel):
     is_friend: bool = False
     is_incoming_pending: bool = False
     is_outgoing_pending: bool = False
-
     model_config = ConfigDict(from_attributes=True)
 
-
-# --- Messenger (Conversations & Messages) Schemas ---
-
+# --- Messenger Schemas ---
 class MessageCreate(BaseModel):
     conversation_id: UUID
-    content: Optional[str] = None   # optionnel si un média est joint
+    content: Optional[str] = None
     image_url: Optional[str] = None
     video_url: Optional[str] = None
-
 
 class MessageResponse(BaseModel):
     id: UUID
@@ -148,14 +122,12 @@ class MessageResponse(BaseModel):
     sender_id: UUID
     sender_username: str
     sender_display_name: Optional[str] = None
-    content: str
+    content: Optional[str] = None
     image_url: Optional[str] = None
     video_url: Optional[str] = None
     is_read: bool
     created_at: datetime
-
     model_config = ConfigDict(from_attributes=True)
-
 
 class ConversationResponse(BaseModel):
     id: UUID
@@ -163,21 +135,54 @@ class ConversationResponse(BaseModel):
     user_two_id: UUID
     recipient_username: str
     recipient_display_name: Optional[str] = None
+    recipient_avatar_url: Optional[str] = None
     last_message_content: Optional[str] = None
     last_message_time: Optional[datetime] = None
     last_message_sender_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
-
     model_config = ConfigDict(from_attributes=True)
-
 
 class ConversationCreate(BaseModel):
     recipient_id: UUID
 
-
 class AvatarUpdateRequest(BaseModel):
     avatar_url: str
 
+class CoverUpdateRequest(BaseModel):
+    cover_url: str
 
+# --- Reel Schemas ---
+class ReelCreate(BaseModel):
+    video_url: str
+    description: Optional[str] = None
 
+class ReelCommentResponse(BaseModel):
+    id: UUID
+    reel_id: UUID
+    user_id: UUID
+    content: str
+    created_at: datetime
+    author_username: str
+    author_display_name: Optional[str] = None
+    author_avatar_url: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
+
+class ReelResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    video_url: str
+    description: Optional[str] = None
+    created_at: datetime
+    author_username: str
+    author_display_name: Optional[str] = None
+    author_avatar_url: Optional[str] = None
+    likes_count: int = 0
+    is_liked: bool = False
+    comments_count: int = 0
+    comments: List[ReelCommentResponse] = []
+    model_config = ConfigDict(from_attributes=True)
+
+class ReelCommentCreate(BaseModel):
+    reel_id: UUID
+    content: str
