@@ -2,6 +2,13 @@ services:
   - type: web
     name: justalk
     runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+
+    dockerBuildArgs:
+      - VITE_SUPABASE_URL=https://gvihebkairntrunsbaxv.supabase.co
+      - VITE_SUPABASE_ANON_KEY=sb_publishable_FKgRWMHd_D3tqOc7UqP3yg_u0jVjWp4
+
     envVars:
       - key: DATABASE_URL
         value: postgresql://postgres.gvihebkairntrunsbaxv:Camuse33%4055@aws-1-eu-central-1.pooler.supabase.com:5432/postgres
@@ -10,10 +17,12 @@ services:
       - key: WEBAUTHN_RP_NAME
         value: Justalk
       - key: WEBAUTHN_RP_ID
-        sync: false
+        value: justalk.onrender.com
       - key: WEBAUTHN_ORIGIN
-        sync: false
+        value: https://justalk.onrender.com
       - key: VITE_SUPABASE_URL
         value: https://gvihebkairntrunsbaxv.supabase.co
       - key: VITE_SUPABASE_ANON_KEY
         value: sb_publishable_FKgRWMHd_D3tqOc7UqP3yg_u0jVjWp4
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

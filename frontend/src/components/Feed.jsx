@@ -45,6 +45,22 @@ export default function Feed({ currentUser, onLogout }) {
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [showMessagesModal, setShowMessagesModal] = useState(false);
 
+  // États du Messenger temps réel
+  const [conversations, setConversations] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatMessageText, setChatMessageText] = useState("");
+  const [sendingChatMessage, setSendingChatMessage] = useState(false);
+  const [chatMediaFile, setChatMediaFile] = useState(null);
+  const [chatMediaType, setChatMediaType] = useState(null); // 'image' | 'video'
+  const [chatMediaPreview, setChatMediaPreview] = useState(null);
+  const chatFileInputRef = useRef(null);
+
+  const selectedConversationRef = useRef(null);
+  useEffect(() => {
+    selectedConversationRef.current = selectedConversation;
+  }, [selectedConversation]);
+
   // États de la modale Amis Réels
   const [friendsList, setFriendsList] = useState([]);
   const [activeTab, setActiveTab] = useState("my-friends");
@@ -164,10 +180,12 @@ export default function Feed({ currentUser, onLogout }) {
     }
   };
 
-  const handleToggleFriendship = async (friendId) => {
+  // --- Actions d'amitié (flux pending → accepté) ---
+
+  const handleSendFriendRequest = async (friendId) => {
     setActioningFriendId(friendId);
     try {
-      const res = await fetch("/api/friends", {
+      const res = await fetch("/api/friends/request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ friend_id: friendId }),
@@ -177,15 +195,17 @@ export default function Feed({ currentUser, onLogout }) {
         setFriendsList((prev) =>
           prev.map((u) => {
             if (u.id === friendId) {
-              const isAdded = result.action === "added";
-              return { ...u, is_friend: isAdded };
+              if (result.action === "accepted") {
+                return { ...u, is_friend: true, is_outgoing_pending: false, is_incoming_pending: false };
+              }
+              return { ...u, is_outgoing_pending: true };
             }
             return u;
           })
         );
       } else {
         const errData = await res.json().catch(() => ({}));
-        alert(errData.detail || "Erreur de mise à jour d'amitié.");
+        alert(errData.detail || "Erreur lors de la demande d'amitié.");
       }
     } catch (err) {
       console.error(err);
@@ -195,9 +215,196 @@ export default function Feed({ currentUser, onLogout }) {
     }
   };
 
+  const handleAcceptFriendRequest = async (friendId) => {
+    setActioningFriendId(friendId);
+    try {
+      const res = await fetch("/api/friends/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friend_id: friendId }),
+      });
+      if (res.ok) {
+        setFriendsList((prev) =>
+          prev.map((u) =>
+            u.id === friendId
+              ? { ...u, is_friend: true, is_incoming_pending: false, is_outgoing_pending: false }
+              : u
+          )
+        );
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.detail || "Erreur lors de l'acceptation.");
+      }
+    } catch (err) {
+      alert("Erreur réseau.");
+    } finally {
+      setActioningFriendId(null);
+    }
+  };
+
+  const handleDeclineFriendRequest = async (friendId) => {
+    setActioningFriendId(friendId);
+    try {
+      const res = await fetch("/api/friends/decline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ friend_id: friendId }),
+      });
+      if (res.ok) {
+        setFriendsList((prev) =>
+          prev.map((u) =>
+            u.id === friendId
+              ? { ...u, is_friend: false, is_incoming_pending: false, is_outgoing_pending: false }
+              : u
+          )
+        );
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.detail || "Erreur lors du refus.");
+      }
+    } catch (err) {
+      alert("Erreur réseau.");
+    } finally {
+      setActioningFriendId(null);
+    }
+  };
+
+
+  const fetchConversations = async () => {
+    try {
+      const res = await fetch("/api/conversations");
+      if (res.ok) {
+        const data = await res.json();
+        setConversations(data);
+      }
+    } catch (err) {
+      console.error("Erreur chargement convs:", err);
+    }
+  };
+
+  const fetchChatMessages = async (convId) => {
+    try {
+      const res = await fetch(`/api/conversations/${convId}/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        setChatMessages(data);
+      }
+    } catch (err) {
+      console.error("Erreur chargement messages:", err);
+    }
+  };
+
+  const handleOpenChat = async (recipientId) => {
+    try {
+      const res = await fetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipient_id: recipientId }),
+      });
+      if (res.ok) {
+        const conv = await res.json();
+        setConversations(prev => {
+          if (prev.some(c => c.id === conv.id)) return prev;
+          return [conv, ...prev];
+        });
+        setSelectedConversation(conv);
+        fetchChatMessages(conv.id);
+        setShowFriendsModal(false);
+        setShowMessagesModal(true);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.detail || "Erreur de création de la conversation.");
+      }
+    } catch (err) {
+      console.error("Erreur ouverture chat:", err);
+    }
+  };
+
+  const handleSendChatMessage = async (e) => {
+    e.preventDefault();
+    if (!chatMessageText.trim() && !chatMediaFile) return;
+    if (!selectedConversation) return;
+
+    setSendingChatMessage(true);
+    try {
+      let imageUrl = null;
+      let videoUrl = null;
+
+      if (chatMediaFile) {
+        const publicUrl = await uploadMedia(chatMediaFile);
+        if (chatMediaType === "image") {
+          imageUrl = publicUrl;
+        } else {
+          videoUrl = publicUrl;
+        }
+      }
+
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversation_id: selectedConversation.id,
+          content: chatMessageText.trim(),
+          image_url: imageUrl,
+          video_url: videoUrl
+        }),
+      });
+
+      if (res.ok) {
+        const newMsg = await res.json();
+        setChatMessages(prev => [...prev, newMsg]);
+        setChatMessageText("");
+        clearChatMedia();
+        fetchConversations();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.detail || "Erreur d'envoi du message.");
+      }
+    } catch (err) {
+      console.error("Erreur envoi message:", err);
+    } finally {
+      setSendingChatMessage(false);
+    }
+  };
+
+  const handleChatFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type.startsWith("image/")) {
+      setChatMediaFile(file);
+      setChatMediaType("image");
+      setChatMediaPreview(URL.createObjectURL(file));
+    } else if (file.type.startsWith("video/")) {
+      setChatMediaFile(file);
+      setChatMediaType("video");
+      setChatMediaPreview(URL.createObjectURL(file));
+    } else {
+      alert("Type de fichier non supporté.");
+    }
+  };
+
+  const clearChatMedia = () => {
+    if (chatMediaPreview) URL.revokeObjectURL(chatMediaPreview);
+    setChatMediaFile(null);
+    setChatMediaType(null);
+    setChatMediaPreview(null);
+    if (chatFileInputRef.current) chatFileInputRef.current.value = "";
+  };
+
+  const formatMessageTime = (dateStr) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    return d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  };
+
   const fetchUsersListRef = useRef(null);
+  const fetchConversationsRef = useRef(null);
+  const fetchChatMessagesRef = useRef(null);
+
   useEffect(() => {
     fetchUsersListRef.current = fetchUsersList;
+    fetchConversationsRef.current = fetchConversations;
+    fetchChatMessagesRef.current = fetchChatMessages;
   });
 
   useEffect(() => {
@@ -261,6 +468,17 @@ export default function Feed({ currentUser, onLogout }) {
         () => {
           if (showFriendsModalRef.current && fetchUsersListRef.current) {
             fetchUsersListRef.current();
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          console.log("Nouveau message Realtime:", payload.new);
+          if (fetchConversationsRef.current) fetchConversationsRef.current();
+          if (selectedConversationRef.current && payload.new.conversation_id === selectedConversationRef.current.id) {
+            if (fetchChatMessagesRef.current) fetchChatMessagesRef.current(selectedConversationRef.current.id);
           }
         }
       )
@@ -629,22 +847,30 @@ export default function Feed({ currentUser, onLogout }) {
 
           {/* Navigation au centre cliquable */}
           <nav className="flex items-center gap-1 sm:gap-4">
-            <button 
-              onClick={() => {
-                setShowFriendsModal(true);
-                setShowNotificationsDropdown(false);
-                setShowUserDropdown(false);
-              }}
-              className="p-2.5 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-slate-50 transition-all"
-              title="Amis"
-            >
-              <Users size={20} />
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => {
+                  setShowFriendsModal(true);
+                  setShowNotificationsDropdown(false);
+                  setShowUserDropdown(false);
+                }}
+                className="p-2.5 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-slate-50 transition-all"
+                title="Amis"
+              >
+                <Users size={20} />
+                {friendsList.filter(u => u.is_incoming_pending).length > 0 && (
+                  <span className="absolute top-1 right-1 w-4 h-4 bg-green-500 text-[9px] font-bold text-white rounded-full flex items-center justify-center">
+                    {friendsList.filter(u => u.is_incoming_pending).length}
+                  </span>
+                )}
+              </button>
+            </div>
             <button 
               onClick={() => {
                 setShowMessagesModal(true);
                 setShowNotificationsDropdown(false);
                 setShowUserDropdown(false);
+                fetchConversations();
               }}
               className="p-2.5 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-slate-50 transition-all"
               title="Messages"
@@ -1165,17 +1391,25 @@ export default function Feed({ currentUser, onLogout }) {
                                 <p className="text-[9px] text-slate-400 leading-none">@{f.username}</p>
                               </div>
                             </div>
-                            <button
-                              onClick={() => handleToggleFriendship(f.id)}
-                              disabled={actioningFriendId === f.id}
-                              className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] transition-colors flex items-center justify-center gap-1 disabled:opacity-50 min-w-[65px]"
-                            >
-                              {actioningFriendId === f.id ? (
-                                <Loader2 size={10} className="animate-spin" />
-                              ) : (
-                                "Retirer"
-                              )}
-                            </button>
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => handleOpenChat(f.id)}
+                                className="px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 font-bold text-[10px] transition-colors flex items-center justify-center gap-1"
+                              >
+                                Message
+                              </button>
+                              <button
+                                onClick={() => handleDeclineFriendRequest(f.id)}
+                                disabled={actioningFriendId === f.id}
+                                className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] transition-colors flex items-center justify-center gap-1 disabled:opacity-50 min-w-[65px]"
+                              >
+                                {actioningFriendId === f.id ? (
+                                  <Loader2 size={10} className="animate-spin" />
+                                ) : (
+                                  "Retirer"
+                                )}
+                              </button>
+                            </div>
                           </div>
                         ))
                     ) : (
@@ -1184,6 +1418,7 @@ export default function Feed({ currentUser, onLogout }) {
                       </div>
                     )
                   ) : (
+                    /* Onglet Trouver des amis : gère pending entrant, sortant, et aucune relation */
                     friendsList.filter((u) => !u.is_friend).length > 0 ? (
                       friendsList
                         .filter((u) => !u.is_friend)
@@ -1198,17 +1433,42 @@ export default function Feed({ currentUser, onLogout }) {
                                 <p className="text-[9px] text-slate-400 leading-none">@{f.username}</p>
                               </div>
                             </div>
-                            <button
-                              onClick={() => handleToggleFriendship(f.id)}
-                              disabled={actioningFriendId === f.id}
-                              className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] transition-colors flex items-center justify-center gap-1 disabled:opacity-50 min-w-[65px]"
-                            >
-                              {actioningFriendId === f.id ? (
-                                <Loader2 size={10} className="animate-spin" />
-                              ) : (
-                                "Ajouter"
-                              )}
-                            </button>
+
+                            {/* Boutons selon l'état */}
+                            {f.is_incoming_pending ? (
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={() => handleAcceptFriendRequest(f.id)}
+                                  disabled={actioningFriendId === f.id}
+                                  className="px-3 py-1.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] transition-colors flex items-center justify-center disabled:opacity-50 min-w-[60px]"
+                                >
+                                  {actioningFriendId === f.id ? <Loader2 size={10} className="animate-spin" /> : "Accepter"}
+                                </button>
+                                <button
+                                  onClick={() => handleDeclineFriendRequest(f.id)}
+                                  disabled={actioningFriendId === f.id}
+                                  className="px-3 py-1.5 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] transition-colors flex items-center justify-center disabled:opacity-50 min-w-[55px]"
+                                >
+                                  {actioningFriendId === f.id ? <Loader2 size={10} className="animate-spin" /> : "Refuser"}
+                                </button>
+                              </div>
+                            ) : f.is_outgoing_pending ? (
+                              <button
+                                onClick={() => handleDeclineFriendRequest(f.id)}
+                                disabled={actioningFriendId === f.id}
+                                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 font-bold text-[10px] transition-colors flex items-center justify-center gap-1 disabled:opacity-50 min-w-[80px]"
+                              >
+                                {actioningFriendId === f.id ? <Loader2 size={10} className="animate-spin" /> : "En attente"}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleSendFriendRequest(f.id)}
+                                disabled={actioningFriendId === f.id}
+                                className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] transition-colors flex items-center justify-center gap-1 disabled:opacity-50 min-w-[65px]"
+                              >
+                                {actioningFriendId === f.id ? <Loader2 size={10} className="animate-spin" /> : "Ajouter"}
+                              </button>
+                            )}
                           </div>
                         ))
                     ) : (
@@ -1226,37 +1486,201 @@ export default function Feed({ currentUser, onLogout }) {
 
       {/* 6. MODALE MESSAGES (Click Messenger Header) */}
       {showMessagesModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-sm bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200/80 animate-in zoom-in duration-200">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="font-display font-extrabold text-sm text-slate-800 flex items-center gap-2">
-                <MessageCircle size={16} className="text-blue-600" />
-                Discussions récentes
-              </h3>
-              <button onClick={() => setShowMessagesModal(false)} className="p-1.5 rounded-full hover:bg-slate-200 text-slate-400">
-                <X size={15} />
-              </button>
-            </div>
-            <div className="p-4 max-h-80 overflow-y-auto flex flex-col gap-1">
-              {[
-                { name: "Maxime Dubois", snippet: "On se capte à 18h ?", time: "Il y a 5m" },
-                { name: "Chloé Petit", snippet: "Super la photo de ta story !", time: "Il y a 2h" },
-                { name: "Léa Martin", snippet: "Tu as fini le projet ?", time: "Hier" }
-              ].map((msg, i) => (
-                <div key={i} className="flex items-center justify-between p-2.5 rounded-2xl hover:bg-slate-50 cursor-pointer transition-colors">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-xs">
-                      {msg.name[0]}
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 flex justify-center items-center">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200/80 animate-in zoom-in duration-200 flex flex-col h-[500px]">
+            
+            {!selectedConversation ? (
+              <>
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+                  <h3 className="font-display font-extrabold text-sm text-slate-800 flex items-center gap-2">
+                    <MessageCircle size={16} className="text-blue-600" />
+                    Discussions récentes
+                  </h3>
+                  <button onClick={() => setShowMessagesModal(false)} className="p-1.5 rounded-full hover:bg-slate-200 text-slate-400">
+                    <X size={15} />
+                  </button>
+                </div>
+                
+                <div className="p-4 overflow-y-auto flex-1 flex flex-col gap-1">
+                  {conversations.length > 0 ? (
+                    conversations.map((c) => (
+                      <div 
+                        key={c.id} 
+                        onClick={() => {
+                          setSelectedConversation(c);
+                          fetchChatMessages(c.id);
+                        }}
+                        className="flex items-center justify-between p-3 rounded-2xl hover:bg-slate-50 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm shrink-0">
+                            {c.recipient_display_name?.[0]?.toUpperCase() || c.recipient_username?.[0]?.toUpperCase() || "U"}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-slate-800 truncate">
+                              {c.recipient_display_name || c.recipient_username}
+                            </p>
+                            <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[200px]">
+                              {c.last_message_content ? (
+                                <>
+                                  {c.last_message_sender_id === currentUser.id ? "Vous : " : ""}
+                                  {c.last_message_content}
+                                </>
+                              ) : (
+                                <span className="italic text-slate-400">Aucun message</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        {c.last_message_time && (
+                          <span className="text-[8px] text-slate-400 whitespace-nowrap self-start mt-1 shrink-0">
+                            {formatMessageTime(c.last_message_time)}
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-16 text-slate-400 text-xs flex flex-col items-center gap-2 my-auto">
+                      <MessageCircle size={24} className="text-slate-300" />
+                      <p>Aucune discussion pour le moment.</p>
+                      <button 
+                        onClick={() => {
+                          setShowMessagesModal(false);
+                          setShowFriendsModal(true);
+                        }}
+                        className="mt-2 text-blue-600 font-bold hover:underline"
+                      >
+                        Démarrer une discussion depuis vos amis
+                      </button>
                     </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">{msg.name}</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[170px]">{msg.snippet}</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <button 
+                      onClick={() => setSelectedConversation(null)} 
+                      className="p-1 rounded-full hover:bg-slate-200 text-slate-500 mr-0.5"
+                      title="Retour"
+                    >
+                      <ChevronRight size={18} className="transform rotate-180" />
+                    </button>
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-sm shrink-0">
+                      {selectedConversation.recipient_display_name?.[0]?.toUpperCase() || selectedConversation.recipient_username?.[0]?.toUpperCase() || "U"}
+                    </div>
+                    <div className="min-w-0">
+                      <h4 className="text-xs font-bold text-slate-800 truncate leading-snug">
+                        {selectedConversation.recipient_display_name || selectedConversation.recipient_username}
+                      </h4>
+                      <p className="text-[8px] text-slate-400 mt-0.5 leading-none">@{selectedConversation.recipient_username}</p>
                     </div>
                   </div>
-                  <span className="text-[8px] text-slate-400">{msg.time}</span>
+                  <button onClick={() => setShowMessagesModal(false)} className="p-1.5 rounded-full hover:bg-slate-200 text-slate-400 shrink-0">
+                    <X size={15} />
+                  </button>
                 </div>
-              ))}
-            </div>
+
+                <div className="flex-1 p-4 overflow-y-auto flex flex-col gap-3.5 bg-slate-50/30">
+                  {chatMessages.map((m) => {
+                    const isMe = m.sender_id === currentUser.id;
+                    return (
+                      <div 
+                        key={m.id} 
+                        className={`flex flex-col max-w-[80%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}
+                      >
+                        <div className={`p-3 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
+                          isMe 
+                            ? 'bg-blue-600 text-white rounded-br-none' 
+                            : 'bg-white text-slate-800 border border-slate-100 rounded-bl-none'
+                        }`}>
+                          {m.content}
+                          
+                          {m.image_url && (
+                            <div className="mt-2 rounded-xl overflow-hidden max-w-[200px] border border-slate-100">
+                              <img src={m.image_url} alt="Pièce jointe" className="w-full object-cover" />
+                            </div>
+                          )}
+                          {m.video_url && (
+                            <div className="mt-2 rounded-xl overflow-hidden max-w-[200px] border border-slate-100">
+                              <video src={m.video_url} controls className="w-full" />
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[8px] text-slate-400 mt-1.5 px-1 font-medium">
+                          {formatMessageTime(m.created_at)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {chatMessages.length === 0 && (
+                    <div className="flex-1 flex items-center justify-center text-slate-400 text-xs italic my-auto">
+                      Début de la discussion. Dites bonjour !
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-3 border-t border-slate-100 bg-white shrink-0 flex flex-col gap-2">
+                  {chatMediaPreview && (
+                    <div className="rounded-xl overflow-hidden border border-slate-200 bg-slate-50 relative group max-h-[80px] flex items-center justify-center shrink-0">
+                      {chatMediaType === "image" ? (
+                        <img src={chatMediaPreview} alt="Aperçu chat" className="max-h-[80px] object-cover" />
+                      ) : (
+                        <video src={chatMediaPreview} className="max-h-[80px] object-contain bg-black" />
+                      )}
+                      <button
+                        type="button"
+                        onClick={clearChatMedia}
+                        className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 hover:bg-red-600 text-white flex items-center justify-center transition-all shadow-md"
+                        title="Supprimer"
+                      >
+                        <Trash2 size={10} />
+                      </button>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleSendChatMessage} className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => chatFileInputRef.current?.click()}
+                      disabled={sendingChatMessage}
+                      className="p-2 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-slate-50 transition-colors shrink-0"
+                      title="Importer photo/vidéo"
+                    >
+                      <Image size={16} />
+                    </button>
+                    <input
+                      type="file"
+                      ref={chatFileInputRef}
+                      onChange={handleChatFileChange}
+                      accept="image/*,video/*"
+                      className="hidden"
+                    />
+                    <input
+                      type="text"
+                      value={chatMessageText}
+                      onChange={(e) => setChatMessageText(e.target.value)}
+                      placeholder="Votre message..."
+                      className="flex-1 input-pill py-2.5 px-4 text-xs bg-slate-50 border border-slate-200"
+                      disabled={sendingChatMessage}
+                      required={!chatMediaFile}
+                    />
+                    <button
+                      type="submit"
+                      disabled={sendingChatMessage || (!chatMessageText.trim() && !chatMediaFile)}
+                      className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold flex items-center justify-center shrink-0 disabled:opacity-40 transition-all"
+                    >
+                      {sendingChatMessage ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Send size={13} />
+                      )}
+                    </button>
+                  </form>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

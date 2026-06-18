@@ -15,6 +15,7 @@ class RegistrationOptionsRequest(BaseModel):
 class RegistrationVerificationRequest(BaseModel):
     username: str
     display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
     registration_response: Dict[str, Any]  # Reçu du frontend (@github/webauthn-json)
 
 class AuthenticationOptionsRequest(BaseModel):
@@ -31,6 +32,7 @@ class UserResponse(BaseModel):
     id: UUID
     username: str
     display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -123,8 +125,59 @@ class UserSearchResponse(BaseModel):
     id: UUID
     username: str
     display_name: Optional[str] = None
+    avatar_url: Optional[str] = None
     is_friend: bool = False
-    is_pending: bool = False
+    is_incoming_pending: bool = False
+    is_outgoing_pending: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Messenger (Conversations & Messages) Schemas ---
+
+class MessageCreate(BaseModel):
+    conversation_id: UUID
+    content: Optional[str] = None   # optionnel si un média est joint
+    image_url: Optional[str] = None
+    video_url: Optional[str] = None
+
+
+class MessageResponse(BaseModel):
+    id: UUID
+    conversation_id: UUID
+    sender_id: UUID
+    sender_username: str
+    sender_display_name: Optional[str] = None
+    content: str
+    image_url: Optional[str] = None
+    video_url: Optional[str] = None
+    is_read: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationResponse(BaseModel):
+    id: UUID
+    user_one_id: UUID
+    user_two_id: UUID
+    recipient_username: str
+    recipient_display_name: Optional[str] = None
+    last_message_content: Optional[str] = None
+    last_message_time: Optional[datetime] = None
+    last_message_sender_id: Optional[UUID] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ConversationCreate(BaseModel):
+    recipient_id: UUID
+
+
+class AvatarUpdateRequest(BaseModel):
+    avatar_url: str
+
+
 

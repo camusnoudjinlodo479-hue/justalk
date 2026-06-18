@@ -52,6 +52,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Justalk API", version="1.0.0", lifespan=lifespan)
 
+
+# --- Health Check (Render / monitoring) ---
+
+@app.get("/api/health")
+def health_check():
+    """Endpoint de vérification de santé pour Render et les outils de monitoring."""
+    return {"status": "ok", "service": "justalk-api"}
+
+
 # Récupération des configurations d'environnement
 WEBAUTHN_RP_ID = os.getenv("WEBAUTHN_RP_ID", "localhost")
 WEBAUTHN_RP_NAME = os.getenv("WEBAUTHN_RP_NAME", "Justalk")
@@ -149,7 +158,8 @@ def verify_register(req: schemas.RegistrationVerificationRequest, response: Resp
         db_user = models.User(
             id=uuid.UUID(user_id_str),
             username=username,
-            display_name=display_name
+            display_name=display_name,
+            avatar_url=req.avatar_url
         )
         db.add(db_user)
         
@@ -384,38 +394,42 @@ def create_post(req: schemas.PostCreate, db: Session = Depends(database.get_db),
 
 @app.post("/api/upload")
 async def upload_file(file: UploadFile = File(...), current_user: models.User = Depends(auth.get_current_user)):
-    """Téléverse un fichier image ou vidéo sur le stockage Supabase."""
+    """Téléverse un fichier image ou vidéo sur le stockage Supabase (avec fallback de stockage local)."""
+    contents = await file.read()
+    file_ext = file.filename.split(".")[-1]
+    file_name = f"{current_user.id}_{int(time.time())}.{file_ext}"
+    
     supabase_url = os.getenv("VITE_SUPABASE_URL")
     service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-    if not supabase_url or not service_key:
-        raise HTTPException(status_code=500, detail="Configuration Supabase manquante dans le backend.")
-        
-    try:
-        contents = await file.read()
-        file_ext = file.filename.split(".")[-1]
-        file_name = f"{current_user.id}_{int(time.time())}.{file_ext}"
-        file_path = f"posts/{file_name}"
-        
-        upload_url = f"{supabase_url}/storage/v1/object/justalk/{file_path}"
-        
-        req = urllib.request.Request(upload_url, data=contents, method="POST")
-        req.add_header("apikey", service_key)
-        req.add_header("Authorization", f"Bearer {service_key}")
-        req.add_header("Content-Type", file.content_type)
-        
-        with urllib.request.urlopen(req) as res:
-            res.read()
+    
+    if supabase_url and service_key and "supabase.co" in supabase_url:
+        try:
+            file_path = f"posts/{file_name}"
+            upload_url = f"{supabase_url}/storage/v1/object/justalk/{file_path}"
             
-        public_url = f"{supabase_url}/storage/v1/object/public/justalk/{file_path}"
-        return {"url": public_url}
-        
-    except urllib.error.HTTPError as e:
-        err_msg = e.read().decode("utf-8")
-        print(f"Supabase upload HTTP error: {e.code} - {err_msg}")
-        raise HTTPException(status_code=500, detail=f"Téléversement Supabase échoué: {err_msg}")
+            req = urllib.request.Request(upload_url, data=contents, method="POST")
+            req.add_header("apikey", service_key)
+            req.add_header("Authorization", f"Bearer {service_key}")
+            req.add_header("Content-Type", file.content_type)
+            
+            with urllib.request.urlopen(req) as res:
+                res.read()
+                
+            public_url = f"{supabase_url}/storage/v1/object/public/justalk/{file_path}"
+            return {"url": public_url}
+        except Exception as e:
+            print(f"Supabase upload failed, falling back to local: {str(e)}")
+            
+    # Local fallback
+    try:
+        uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+        os.makedirs(uploads_dir, exist_ok=True)
+        local_path = os.path.join(uploads_dir, file_name)
+        with open(local_path, "wb") as f:
+            f.write(contents)
+        return {"url": f"/api/uploads/{file_name}"}
     except Exception as e:
-        print(f"Supabase upload generic error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Erreur de téléversement: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Erreur de téléversement local: {str(e)}")
 
 
 # --- Endpoints Stories (Stories de 24 heures) ---
@@ -618,9 +632,11 @@ def get_notifications(db: Session = Depends(database.get_db), current_user: mode
 
 # --- Endpoints Amis Réels ---
 
+# --- Endpoints Amis Réels ---
+
 @app.get("/api/users", response_model=List[schemas.UserSearchResponse])
 def get_users_list(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Liste tous les utilisateurs enregistrés (sauf soi-même) avec le statut d'amitié."""
+    """Liste tous les utilisateurs (sauf soi-même) avec le statut d'amitié détaillé."""
     friendships = db.query(models.Friendship).filter(
         (models.Friendship.user_id == current_user.id) | (models.Friendship.friend_id == current_user.id)
     ).all()
@@ -628,37 +644,134 @@ def get_users_list(db: Session = Depends(database.get_db), current_user: models.
     friend_status = {}
     for f in friendships:
         other_id = f.friend_id if f.user_id == current_user.id else f.user_id
-        friend_status[other_id] = f.status
+        friend_status[other_id] = {
+            "status": f.status,
+            "sender_id": f.user_id
+        }
         
     users = db.query(models.User).filter(models.User.id != current_user.id).all()
     
     results = []
     for u in users:
-        status = friend_status.get(u.id)
-        is_friend = (status == "accepted")
-        is_pending = (status == "pending")
+        f_info = friend_status.get(u.id)
+        is_friend = False
+        is_incoming_pending = False
+        is_outgoing_pending = False
+        
+        if f_info:
+            if f_info["status"] == "accepted":
+                is_friend = True
+            elif f_info["status"] == "pending":
+                if f_info["sender_id"] == current_user.id:
+                    is_outgoing_pending = True
+                else:
+                    is_incoming_pending = True
+                    
         results.append(
             schemas.UserSearchResponse(
                 id=u.id,
                 username=u.username,
                 display_name=u.display_name,
+                avatar_url=u.avatar_url,
                 is_friend=is_friend,
-                is_pending=is_pending
+                is_incoming_pending=is_incoming_pending,
+                is_outgoing_pending=is_outgoing_pending
             )
         )
     return results
 
 
+@app.post("/api/friends/request")
+def send_friend_request(req: schemas.FriendshipRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Envoie une invitation d'amitié (statut pending) ou accepte l'existante."""
+    if req.friend_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Vous ne pouvez pas vous ajouter vous-même.")
+
+    existing = db.query(models.Friendship).filter(
+        ((models.Friendship.user_id == current_user.id) & (models.Friendship.friend_id == req.friend_id)) |
+        ((models.Friendship.user_id == req.friend_id) & (models.Friendship.friend_id == current_user.id))
+    ).first()
+
+    if existing:
+        if existing.status == "accepted":
+            return {"status": "success", "action": "already_friends"}
+        elif existing.user_id == current_user.id:
+            return {"status": "success", "action": "already_requested"}
+        else:
+            existing.status = "accepted"
+            db.commit()
+            return {"status": "success", "action": "accepted"}
+
+    try:
+        new_request = models.Friendship(
+            user_id=current_user.id,
+            friend_id=req.friend_id,
+            status="pending"
+        )
+        db.add(new_request)
+        
+        db_notif = models.Notification(
+            user_id=req.friend_id,
+            content=f"@{current_user.username} vous a envoyé une invitation d'amitié."
+        )
+        db.add(db_notif)
+        db.commit()
+        return {"status": "success", "action": "requested"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur d'invitation: {str(e)}")
+
+
+@app.post("/api/friends/accept")
+def accept_friend_request(req: schemas.FriendshipRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Accepte une invitation d'amitié."""
+    existing = db.query(models.Friendship).filter(
+        (models.Friendship.user_id == req.friend_id) & 
+        (models.Friendship.friend_id == current_user.id) &
+        (models.Friendship.status == "pending")
+    ).first()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Invitation introuvable.")
+
+    try:
+        existing.status = "accepted"
+        
+        db_notif = models.Notification(
+            user_id=req.friend_id,
+            content=f"@{current_user.username} a accepté votre invitation d'amitié !"
+        )
+        db.add(db_notif)
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
+@app.post("/api/friends/decline")
+def decline_friend_request(req: schemas.FriendshipRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Refuse une invitation ou retire un ami."""
+    existing = db.query(models.Friendship).filter(
+        ((models.Friendship.user_id == current_user.id) & (models.Friendship.friend_id == req.friend_id)) |
+        ((models.Friendship.user_id == req.friend_id) & (models.Friendship.friend_id == current_user.id))
+    ).first()
+
+    if not existing:
+        raise HTTPException(status_code=404, detail="Relation introuvable.")
+
+    try:
+        db.delete(existing)
+        db.commit()
+        return {"status": "success"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur: {str(e)}")
+
+
 @app.post("/api/friends")
 def toggle_friendship(req: schemas.FriendshipRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Ajoute ou supprime une relation d'amitié (toggle)."""
-    if req.friend_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Vous ne pouvez pas vous ajouter vous-même en ami.")
-        
-    friend_user = db.query(models.User).filter(models.User.id == req.friend_id).first()
-    if not friend_user:
-        raise HTTPException(status_code=404, detail="Utilisateur non trouvé.")
-        
+    """Toggle legacy pour compatibilité descendante (décline si existant, sinon fait une requête)."""
     existing = db.query(models.Friendship).filter(
         ((models.Friendship.user_id == current_user.id) & (models.Friendship.friend_id == req.friend_id)) |
         ((models.Friendship.user_id == req.friend_id) & (models.Friendship.friend_id == current_user.id))
@@ -668,28 +781,19 @@ def toggle_friendship(req: schemas.FriendshipRequest, db: Session = Depends(data
         if existing:
             db.delete(existing)
             db.commit()
-            action = "removed"
+            return {"status": "success", "action": "removed"}
         else:
-            db_friendship = models.Friendship(
+            new_request = models.Friendship(
                 user_id=current_user.id,
                 friend_id=req.friend_id,
-                status="accepted"
+                status="pending"
             )
-            db.add(db_friendship)
-            
-            db_notif = models.Notification(
-                user_id=req.friend_id,
-                content=f"@{current_user.username} vous a ajouté en ami !"
-            )
-            db.add(db_notif)
-            
+            db.add(new_request)
             db.commit()
-            action = "added"
-            
-        return {"status": "success", "action": action}
+            return {"status": "success", "action": "added"}
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Erreur d'action amitié: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/friends", response_model=List[schemas.UserResponse])
@@ -713,11 +817,242 @@ def get_friends(db: Session = Depends(database.get_db), current_user: models.Use
         schemas.UserResponse(
             id=f.id,
             username=f.username,
-            display_name=f.display_name
+            display_name=f.display_name,
+            avatar_url=f.avatar_url
         )
         for f in friends
     ]
 
+
+@app.post("/api/auth/profile/avatar")
+def update_avatar(req: schemas.AvatarUpdateRequest, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Met à jour la photo de profil de l'utilisateur connecté."""
+    try:
+        current_user.avatar_url = req.avatar_url
+        db.commit()
+        return {"status": "success", "avatar_url": current_user.avatar_url}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur de mise à jour de l'avatar: {str(e)}")
+
+
+# --- Endpoints Messenger ---
+
+@app.get("/api/conversations", response_model=List[schemas.ConversationResponse])
+def get_conversations(db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Récupère toutes les conversations actives pour l'utilisateur connecté."""
+    convs = db.query(models.Conversation).filter(
+        (models.Conversation.user_one_id == current_user.id) | 
+        (models.Conversation.user_two_id == current_user.id)
+    ).order_by(models.Conversation.updated_at.desc()).all()
+
+    results = []
+    for c in convs:
+        is_user_one = c.user_one_id == current_user.id
+        recipient = c.user_two if is_user_one else c.user_one
+        
+        last_msg = db.query(models.Message).filter(
+            models.Message.conversation_id == c.id
+        ).order_by(models.Message.created_at.desc()).first()
+
+        results.append(
+            schemas.ConversationResponse(
+                id=c.id,
+                user_one_id=c.user_one_id,
+                user_two_id=c.user_two_id,
+                recipient_username=recipient.username,
+                recipient_display_name=recipient.display_name,
+                last_message_content=last_msg.content if last_msg else None,
+                last_message_time=last_msg.created_at if last_msg else None,
+                last_message_sender_id=last_msg.sender_id if last_msg else None,
+                created_at=c.created_at,
+                updated_at=c.updated_at
+            )
+        )
+    return results
+
+
+@app.post("/api/conversations", response_model=schemas.ConversationResponse)
+def create_conversation(req: schemas.ConversationCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Crée une nouvelle conversation ou récupère une existante."""
+    if req.recipient_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Vous ne pouvez pas démarrer une discussion avec vous-même.")
+
+    recipient = db.query(models.User).filter(models.User.id == req.recipient_id).first()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable.")
+
+    user_one_id, user_two_id = sorted([current_user.id, req.recipient_id])
+
+    # Restreindre la création de conversation aux utilisateurs amis acceptés
+    friendship = db.query(models.Friendship).filter(
+        (models.Friendship.status == "accepted") &
+        (
+            ((models.Friendship.user_id == user_one_id) & (models.Friendship.friend_id == user_two_id)) |
+            ((models.Friendship.user_id == user_two_id) & (models.Friendship.friend_id == user_one_id))
+        )
+    ).first()
+    if not friendship:
+        raise HTTPException(status_code=403, detail="Vous devez être amis acceptés pour démarrer une conversation.")
+
+    existing = db.query(models.Conversation).filter(
+        models.Conversation.user_one_id == user_one_id,
+        models.Conversation.user_two_id == user_two_id
+    ).first()
+
+    if existing:
+        last_msg = db.query(models.Message).filter(
+            models.Message.conversation_id == existing.id
+        ).order_by(models.Message.created_at.desc()).first()
+
+        return schemas.ConversationResponse(
+            id=existing.id,
+            user_one_id=existing.user_one_id,
+            user_two_id=existing.user_two_id,
+            recipient_username=recipient.username,
+            recipient_display_name=recipient.display_name,
+            last_message_content=last_msg.content if last_msg else None,
+            last_message_time=last_msg.created_at if last_msg else None,
+            last_message_sender_id=last_msg.sender_id if last_msg else None,
+            created_at=existing.created_at,
+            updated_at=existing.updated_at
+        )
+
+    try:
+        new_conv = models.Conversation(
+            user_one_id=user_one_id,
+            user_two_id=user_two_id
+        )
+        db.add(new_conv)
+        db.commit()
+        db.refresh(new_conv)
+
+        return schemas.ConversationResponse(
+            id=new_conv.id,
+            user_one_id=new_conv.user_one_id,
+            user_two_id=new_conv.user_two_id,
+            recipient_username=recipient.username,
+            recipient_display_name=recipient.display_name,
+            last_message_content=None,
+            last_message_time=None,
+            last_message_sender_id=None,
+            created_at=new_conv.created_at,
+            updated_at=new_conv.updated_at
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la création de la conversation: {str(e)}")
+
+
+@app.get("/api/conversations/{conversation_id}/messages", response_model=List[schemas.MessageResponse])
+def get_messages(conversation_id: uuid.UUID, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Récupère l'historique des messages d'une conversation."""
+    conv = db.query(models.Conversation).filter(models.Conversation.id == conversation_id).first()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation introuvable.")
+
+    if current_user.id != conv.user_one_id and current_user.id != conv.user_two_id:
+        raise HTTPException(status_code=403, detail="Vous n'êtes pas membre de cette conversation.")
+
+    unread_messages = db.query(models.Message).filter(
+        models.Message.conversation_id == conversation_id,
+        models.Message.sender_id != current_user.id,
+        models.Message.is_read == False
+    ).all()
+    for m in unread_messages:
+        m.is_read = True
+    db.commit()
+
+    messages = db.query(models.Message).filter(
+        models.Message.conversation_id == conversation_id
+    ).order_by(models.Message.created_at.asc()).all()
+
+    return [
+        schemas.MessageResponse(
+            id=m.id,
+            conversation_id=m.conversation_id,
+            sender_id=m.sender_id,
+            sender_username=m.sender.username,
+            sender_display_name=m.sender.display_name,
+            content=m.content,
+            image_url=m.image_url,
+            video_url=m.video_url,
+            is_read=m.is_read,
+            created_at=m.created_at
+        )
+        for m in messages
+    ]
+
+
+@app.post("/api/messages", response_model=schemas.MessageResponse)
+def create_message(req: schemas.MessageCreate, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Envoie un nouveau message."""
+    # Valider qu'il y a au moins un contenu (texte ou média)
+    if not req.content and not req.image_url and not req.video_url:
+        raise HTTPException(status_code=400, detail="Le message ne peut pas être vide.")
+
+    conv = db.query(models.Conversation).filter(models.Conversation.id == req.conversation_id).first()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation introuvable.")
+
+    if current_user.id != conv.user_one_id and current_user.id != conv.user_two_id:
+        raise HTTPException(status_code=403, detail="Vous n'êtes pas membre de cette conversation.")
+
+    # Restreindre l'envoi de message aux amis acceptés
+    recipient_id = conv.user_two_id if conv.user_one_id == current_user.id else conv.user_one_id
+    friendship = db.query(models.Friendship).filter(
+        (models.Friendship.status == "accepted") &
+        (
+            ((models.Friendship.user_id == current_user.id) & (models.Friendship.friend_id == recipient_id)) |
+            ((models.Friendship.user_id == recipient_id) & (models.Friendship.friend_id == current_user.id))
+        )
+    ).first()
+    if not friendship:
+        raise HTTPException(status_code=403, detail="Vous devez être amis acceptés pour envoyer un message.")
+
+    try:
+        new_msg = models.Message(
+            conversation_id=req.conversation_id,
+            sender_id=current_user.id,
+            content=req.content.strip() if req.content else None,
+            image_url=req.image_url,
+            video_url=req.video_url
+        )
+        db.add(new_msg)
+        
+        conv.updated_at = datetime.now(timezone.utc)
+        
+        recipient_id = conv.user_two_id if conv.user_one_id == current_user.id else conv.user_one_id
+        db_notif = models.Notification(
+            user_id=recipient_id,
+            content=f"@{current_user.username} vous a envoyé un message."
+        )
+        db.add(db_notif)
+        
+        db.commit()
+        db.refresh(new_msg)
+
+        return schemas.MessageResponse(
+            id=new_msg.id,
+            conversation_id=new_msg.conversation_id,
+            sender_id=new_msg.sender_id,
+            sender_username=current_user.username,
+            sender_display_name=current_user.display_name,
+            content=new_msg.content,
+            image_url=new_msg.image_url,
+            video_url=new_msg.video_url,
+            is_read=new_msg.is_read,
+            created_at=new_msg.created_at
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur d'envoi du message: {str(e)}")
+
+
+# Montage du dossier uploads local (fallback si Supabase non configuré)
+uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/api/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 # Montage du dossier frontend/dist pour servir les fichiers statiques de React
 frontend_dist_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

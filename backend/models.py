@@ -14,6 +14,7 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     username = Column(String(255), unique=True, nullable=False, index=True)
     display_name = Column(String(255), nullable=True)
+    avatar_url = Column(String(2048), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relations
@@ -142,5 +143,41 @@ class Friendship(Base):
     # Relations (avec clés étrangères explicites car deux liaisons vers la même table)
     user = relationship("User", foreign_keys=[user_id])
     friend = relationship("User", foreign_keys=[friend_id])
+
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_one_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_two_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Contrainte d'unicité pour n'avoir qu'une seule conversation par paire d'utilisateurs
+    __table_args__ = (UniqueConstraint("user_one_id", "user_two_id", name="_user_one_two_uc"),)
+
+    # Relations
+    user_one = relationship("User", foreign_keys=[user_one_id])
+    user_two = relationship("User", foreign_keys=[user_two_id])
+    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
+
+
+class Message(Base):
+    __tablename__ = "messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False)
+    sender_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=True)   # nullable pour les messages media-only
+    image_url = Column(String(2048), nullable=True)
+    video_url = Column(String(2048), nullable=True)
+    is_read = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relations
+    conversation = relationship("Conversation", back_populates="messages")
+    sender = relationship("User")
+
 
 
