@@ -1,6 +1,7 @@
 // frontend/src/utils/confetti.js
 
 export function triggerConfetti() {
+  console.log('confetti triggered');
   // 1. Créer le canvas s'il n'existe pas déjà
   let canvas = document.getElementById("confetti-canvas");
   if (!canvas) {

@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { create } from "@github/webauthn-json";
 import { User, ScanFace, ArrowRight, ShieldCheck, AlertCircle, Mic } from "lucide-react";
+import { triggerConfetti } from "../utils/confetti";
 
 export default function Register({ onRegisterSuccess, onGoToLogin }) {
   const [username, setUsername] = useState("");
@@ -82,6 +83,15 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
     }
 
     try {
+      // Vérifier si la biométrie (platform authenticator) est supportée et configurée
+      if (!window.PublicKeyCredential) {
+        throw new Error("Ajoutez une empreinte dans Paramètres");
+      }
+      const isBiometricAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      if (!isBiometricAvailable) {
+        throw new Error("Ajoutez une empreinte dans Paramètres");
+      }
+
       // 1. Appel du backend pour récupérer les options de création de clé
       const optionsRes = await fetch("/api/webauthn/register-options", {
         method: "POST",
@@ -120,6 +130,9 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
 
       const verifyData = await verifyRes.json();
       setSuccess(true);
+      
+      console.log("compte créé avec succès, triggering confetti");
+      triggerConfetti();
       window.triggerConfetti?.();
       
       setTimeout(() => {
@@ -203,10 +216,17 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
           </div>
 
           {error && (
-            <div className="p-3.5 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-xs font-semibold flex items-center gap-2 text-left">
-              <AlertCircle size={15} className="shrink-0" />
-              <span>{error}</span>
-            </div>
+            error.includes("Ajoutez une empreinte dans Paramètres") ? (
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold flex items-center gap-2 text-left">
+                <AlertCircle size={15} className="shrink-0 text-amber-500" />
+                <span>{error}</span>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-xs font-semibold flex items-center gap-2 text-left">
+                <AlertCircle size={15} className="shrink-0" />
+                <span>{error}</span>
+              </div>
+            )
           )}
 
           {success && (

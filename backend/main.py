@@ -130,10 +130,45 @@ app.add_middleware(
 )
 
 
+# Helper pour resoudre l'RP ID et l'Origine WebAuthn dynamiquement
+def get_webauthn_rp_id_and_origin(request: Request):
+    origin_header = request.headers.get("origin")
+    host_header = request.headers.get("host")
+    
+    rp_id = WEBAUTHN_RP_ID
+    origin = WEBAUTHN_ORIGIN
+    
+    allowed_domains = ["localhost", "127.0.0.1", "k.onrender.com", "justalk.onrender.com"]
+    
+    host = ""
+    if origin_header:
+        from urllib.parse import urlparse
+        parsed = urlparse(origin_header)
+        host = parsed.hostname or ""
+    elif host_header:
+        host = host_header.split(":")[0]
+        
+    if host:
+        is_allowed = False
+        for dom in allowed_domains:
+            if host == dom or host.endswith("." + dom):
+                is_allowed = True
+                break
+        if is_allowed:
+            rp_id = host
+            if origin_header:
+                origin = origin_header
+            else:
+                scheme = "https" if request.headers.get("x-forwarded-proto") == "https" or host not in ["localhost", "127.0.0.1"] else "http"
+                origin = f"{scheme}://{host_header}"
+                
+    return rp_id, origin
+
+
 # --- Enregistrement / Inscription WebAuthn ---
 
 @app.post("/api/webauthn/register-options")
-def get_register_options(req: schemas.RegistrationOptionsRequest, db: Session = Depends(database.get_db)):
+def get_register_options(req: schemas.RegistrationOptionsRequest, request: Request, db: Session = Depends(database.get_db)):
     """Étape 1 Inscription : Génère le challenge WebAuthn."""
     username = req.username.strip()
     if not username:
@@ -146,9 +181,11 @@ def get_register_options(req: schemas.RegistrationOptionsRequest, db: Session = 
     
     user_uuid = uuid.uuid4()
     
+    rp_id, origin = get_webauthn_rp_id_and_origin(request)
+    
     try:
         options = generate_registration_options(
-            rp_id=WEBAUTHN_RP_ID,
+            rp_id=rp_id,
             rp_name=WEBAUTHN_RP_NAME,
             user_id=user_uuid.bytes,
             user_name=username,
@@ -166,7 +203,9 @@ def get_register_options(req: schemas.RegistrationOptionsRequest, db: Session = 
     challenges_db[username] = {
         "challenge": options.challenge,
         "user_id": str(user_uuid),
-        "display_name": req.display_name or username
+        "display_name": req.display_name or username,
+        "rp_id": rp_id,
+        "origin": origin
     }
     
     return json.loads(options_to_json(options))
@@ -184,13 +223,15 @@ def verify_register(req: schemas.RegistrationVerificationRequest, response: Resp
     expected_challenge = stored["challenge"]
     user_id_str = stored["user_id"]
     display_name = stored["display_name"]
+    rp_id = stored.get("rp_id", WEBAUTHN_RP_ID)
+    origin = stored.get("origin", WEBAUTHN_ORIGIN)
     
     try:
         verification = verify_registration_response(
             credential=req.registration_response,
             expected_challenge=expected_challenge,
-            expected_origin=WEBAUTHN_ORIGIN,
-            expected_rp_id=WEBAUTHN_RP_ID
+            expected_origin=origin,
+            expected_rp_id=rp_id
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Vérification WebAuthn échouée : {str(e)}")
@@ -229,7 +270,7 @@ def verify_register(req: schemas.RegistrationVerificationRequest, response: Resp
         httponly=True,
         max_age=30 * 24 * 60 * 60,
         samesite="lax",
-        secure=WEBAUTHN_ORIGIN.startswith("https")
+        secure=origin.startswith("https")
     )
     
     return {"status": "success", "user_id": str(db_user.id)}
@@ -238,7 +279,7 @@ def verify_register(req: schemas.RegistrationVerificationRequest, response: Resp
 # --- Connexion / Authentification WebAuthn ---
 
 @app.post("/api/webauthn/login-options")
-def get_login_options(req: schemas.AuthenticationOptionsRequest, db: Session = Depends(database.get_db)):
+def get_login_options(req: schemas.AuthenticationOptionsRequest, request: Request, db: Session = Depends(database.get_db)):
     """Étape 1 Connexion : Génère le challenge d'authentification."""
     username = req.username.strip()
     if not username:
@@ -259,9 +300,11 @@ def get_login_options(req: schemas.AuthenticationOptionsRequest, db: Session = D
         for cred in db_creds
     ]
     
+    rp_id, origin = get_webauthn_rp_id_and_origin(request)
+    
     try:
         options = generate_authentication_options(
-            rp_id=WEBAUTHN_RP_ID,
+            rp_id=rp_id,
             allow_credentials=allow_credentials,
             user_verification=UserVerificationRequirement.REQUIRED
         )
@@ -270,7 +313,9 @@ def get_login_options(req: schemas.AuthenticationOptionsRequest, db: Session = D
     
     challenges_db[username] = {
         "challenge": options.challenge,
-        "user_id": str(db_user.id)
+        "user_id": str(db_user.id),
+        "rp_id": rp_id,
+        "origin": origin
     }
     
     return json.loads(options_to_json(options))
@@ -287,6 +332,8 @@ def verify_login(req: schemas.AuthenticationVerificationRequest, response: Respo
     
     expected_challenge = stored["challenge"]
     user_id_str = stored["user_id"]
+    rp_id = stored.get("rp_id", WEBAUTHN_RP_ID)
+    origin = stored.get("origin", WEBAUTHN_ORIGIN)
     
     credential_id_b64 = req.authentication_response.get("id")
     if not credential_id_b64:
@@ -305,8 +352,8 @@ def verify_login(req: schemas.AuthenticationVerificationRequest, response: Respo
         verification = verify_authentication_response(
             credential=req.authentication_response,
             expected_challenge=expected_challenge,
-            expected_rp_id=WEBAUTHN_RP_ID,
-            expected_origin=WEBAUTHN_ORIGIN,
+            expected_rp_id=rp_id,
+            expected_origin=origin,
             credential_public_key=base64url_to_bytes(db_cred.public_key),
             credential_current_sign_count=db_cred.sign_count
         )
@@ -325,7 +372,7 @@ def verify_login(req: schemas.AuthenticationVerificationRequest, response: Respo
         httponly=True,
         max_age=30 * 24 * 60 * 60,
         samesite="lax",
-        secure=WEBAUTHN_ORIGIN.startswith("https")
+        secure=origin.startswith("https")
     )
     
     return {"status": "success", "user_id": user_id_str}

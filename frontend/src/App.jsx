@@ -7,7 +7,13 @@ import { ShieldAlert, Loader2 } from "lucide-react";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [view, setView] = useState("login");
+  const [view, setView] = useState(() => {
+    const path = window.location.pathname.toLowerCase();
+    if (path === "/signup" || path === "/register") {
+      return "register";
+    }
+    return "login";
+  });
   const [checkingSession, setCheckingSession] = useState(true);
   const [serverError, setServerError] = useState("");
 
@@ -22,7 +28,12 @@ export default function App() {
         setView("feed");
       } else {
         setCurrentUser(null);
-        setView("login");
+        const path = window.location.pathname.toLowerCase();
+        if (path === "/signup" || path === "/register") {
+          setView("register");
+        } else {
+          setView("login");
+        }
       }
     } catch (err) {
       setServerError("Impossible de se connecter au serveur. Vérifiez que le backend est démarré.");
