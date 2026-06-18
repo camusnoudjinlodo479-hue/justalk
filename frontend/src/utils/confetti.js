@@ -1,5 +1,5 @@
 // frontend/src/utils/confetti.js
-// Confetti CSS-animation based — fiable sur tous les navigateurs
+// Confetti CSS-animation based — instant et spectaculaire
 
 export function triggerConfetti() {
   console.log('confetti triggered');
@@ -14,14 +14,14 @@ export function triggerConfetti() {
     style.id = 'confetti-keyframes';
     style.textContent = `
       @keyframes confetti-fall {
-        0%   { transform: translateY(-10px) rotate(0deg)   scaleX(1);  opacity: 1; }
+        0%   { transform: translateY(-20px) rotate(0deg)   scaleX(1);  opacity: 1; }
         50%  { transform: translateY(45vh)  rotate(360deg) scaleX(-1); opacity: 1; }
         100% { transform: translateY(105vh) rotate(720deg) scaleX(1);  opacity: 0; }
       }
       @keyframes confetti-sway {
         0%   { margin-left: 0px; }
-        25%  { margin-left: 20px; }
-        75%  { margin-left: -20px; }
+        25%  { margin-left: 15px; }
+        75%  { margin-left: -15px; }
         100% { margin-left: 0px; }
       }
     `;
@@ -51,23 +51,23 @@ export function triggerConfetti() {
     '#a855f7', '#ec4899', '#f43f5e',
   ];
 
-  const PARTICLE_COUNT = 160;
+  const PARTICLE_COUNT = 150;
 
   for (let i = 0; i < PARTICLE_COUNT; i++) {
     const el = document.createElement('div');
     const color  = COLORS[Math.floor(Math.random() * COLORS.length)];
     const left   = Math.random() * 100;           // % horizontal
-    const width  = Math.random() * 10 + 6;        // px
-    const height = Math.random() * 6  + 4;        // px
-    const fallDuration = Math.random() * 2.5 + 2; // s
-    const swayDuration = Math.random() * 1.5 + 1; // s
-    const delay  = Math.random() * 1.8;            // s
-    const radius = Math.random() > 0.5 ? '50%' : '2px'; // cercle ou rect
+    const width  = Math.random() * 8 + 6;        // px
+    const height = Math.random() * 10 + 6;        // px
+    const fallDuration = Math.random() * 2.0 + 1.5; // s (plus rapide)
+    const swayDuration = Math.random() * 1.0 + 0.8; // s
+    const delay  = Math.random() * 0.3;            // s (démarrage quasi instantané !)
+    const radius = Math.random() > 0.5 ? '50%' : '2px';
 
     el.style.cssText = `
       position: absolute;
       left: ${left}%;
-      top: -12px;
+      top: -20px;
       width: ${width}px;
       height: ${height}px;
       background-color: ${color};
@@ -84,7 +84,7 @@ export function triggerConfetti() {
   setTimeout(() => {
     const c = document.getElementById('confetti-container');
     if (c) c.remove();
-  }, 5500);
+  }, 5000);
 }
 
 // Exposer globalement pour les appels directs

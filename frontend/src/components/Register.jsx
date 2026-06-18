@@ -156,13 +156,12 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
 
       // Confettis !
       console.log("Compte créé avec succès — confetti triggered");
-      if (typeof window.triggerConfetti === "function") {
-        window.triggerConfetti();
-      }
+      triggerConfetti(); // Appel direct de la fonction importée
 
       setTimeout(() => {
         onRegisterSuccess(verifyData.user_id, cleanUsername);
-      }, 1500);
+      }, 3500);
+
 
     } catch (err) {
       console.error("Erreur inscription :", err);
