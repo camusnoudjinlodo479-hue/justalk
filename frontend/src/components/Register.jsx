@@ -82,17 +82,15 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
       return;
     }
 
-    try {
-      // Vérifier si la biométrie (platform authenticator) est supportée et configurée
-      if (!window.PublicKeyCredential) {
-        throw new Error("Ajoutez une empreinte dans Paramètres");
-      }
-      const isBiometricAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-      if (!isBiometricAvailable) {
-        throw new Error("Ajoutez une empreinte dans Paramètres");
-      }
+    // Vérification minimale : WebAuthn doit être supporté (HTTPS requis)
+    if (!window.PublicKeyCredential) {
+      setError("Votre navigateur ne supporte pas la biométrie. Utilisez Chrome ou Safari en HTTPS.");
+      setLoading(false);
+      return;
+    }
 
-      // 1. Appel du backend pour récupérer les options de création de clé
+    try {
+      // Étape 1 : Récupérer le challenge depuis le backend
       const optionsRes = await fetch("/api/webauthn/register-options", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -108,11 +106,36 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
       }
 
       const options = await optionsRes.json();
+      console.log("WebAuthn options reçues :", options);
 
-      // 2. Déclenchement de la biométrie via @github/webauthn-json
-      const attestation = await create({ publicKey: options });
+      // Étape 2 : Déclencher la biométrie via l'API WebAuthn du navigateur
+      let attestation;
+      try {
+        attestation = await create({ publicKey: options });
+      } catch (webauthnErr) {
+        console.error("Erreur WebAuthn navigateur :", webauthnErr);
+        if (
+          webauthnErr.name === "NotAllowedError" ||
+          webauthnErr.message?.includes("not allowed")
+        ) {
+          throw new Error("Scan annulé ou refusé. Veuillez réessayer et confirmer avec votre empreinte / Face ID.");
+        }
+        if (
+          webauthnErr.name === "InvalidStateError" ||
+          webauthnErr.message?.includes("already registered")
+        ) {
+          throw new Error("Ce pseudo est déjà associé à un appareil. Essayez de vous connecter.");
+        }
+        if (
+          webauthnErr.name === "NotSupportedError" ||
+          webauthnErr.message?.includes("not supported")
+        ) {
+          throw new Error("Ajoutez une empreinte dans Paramètres > Sécurité de votre téléphone.");
+        }
+        throw new Error("La biométrie a échoué : " + (webauthnErr.message || webauthnErr.name));
+      }
 
-      // 3. Envoi de la réponse au backend pour validation finale
+      // Étape 3 : Envoyer l'attestation pour vérification
       const verifyRes = await fetch("/api/webauthn/register-verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -130,14 +153,16 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
 
       const verifyData = await verifyRes.json();
       setSuccess(true);
-      
-      console.log("compte créé avec succès, triggering confetti");
-      triggerConfetti();
-      window.triggerConfetti?.();
-      
+
+      // Confettis !
+      console.log("Compte créé avec succès — confetti triggered");
+      if (typeof window.triggerConfetti === "function") {
+        window.triggerConfetti();
+      }
+
       setTimeout(() => {
         onRegisterSuccess(verifyData.user_id, cleanUsername);
-      }, 1000);
+      }, 1500);
 
     } catch (err) {
       console.error("Erreur inscription :", err);

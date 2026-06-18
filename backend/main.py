@@ -132,37 +132,48 @@ app.add_middleware(
 
 # Helper pour resoudre l'RP ID et l'Origine WebAuthn dynamiquement
 def get_webauthn_rp_id_and_origin(request: Request):
+    from urllib.parse import urlparse
+    
     origin_header = request.headers.get("origin")
-    host_header = request.headers.get("host")
+    host_header = request.headers.get("host", "")
     
     rp_id = WEBAUTHN_RP_ID
     origin = WEBAUTHN_ORIGIN
     
-    allowed_domains = ["localhost", "127.0.0.1", "k.onrender.com", "justalk.onrender.com"]
+    # Tous les domaines onrender.com + localhost sont acceptes
+    def is_allowed_host(h):
+        return h in ["localhost", "127.0.0.1"] or h.endswith(".onrender.com") or h == "onrender.com"
     
-    host = ""
     if origin_header:
-        from urllib.parse import urlparse
         parsed = urlparse(origin_header)
         host = parsed.hostname or ""
+        if is_allowed_host(host):
+            rp_id = host
+            origin = origin_header.rstrip("/")
     elif host_header:
         host = host_header.split(":")[0]
-        
-    if host:
-        is_allowed = False
-        for dom in allowed_domains:
-            if host == dom or host.endswith("." + dom):
-                is_allowed = True
-                break
-        if is_allowed:
+        if is_allowed_host(host):
             rp_id = host
-            if origin_header:
-                origin = origin_header
+            proto = request.headers.get("x-forwarded-proto", "")
+            if proto == "https" or (host not in ["localhost", "127.0.0.1"]):
+                origin = f"https://{host}"
             else:
-                scheme = "https" if request.headers.get("x-forwarded-proto") == "https" or host not in ["localhost", "127.0.0.1"] else "http"
-                origin = f"{scheme}://{host_header}"
-                
+                origin = f"http://{host_header}"
+
+    print(f"[WebAuthn] rp_id={rp_id!r}  origin={origin!r}")
     return rp_id, origin
+
+
+def get_all_valid_origins():
+    """Retourne la liste de toutes les origines acceptees pour la verification."""
+    return [
+        WEBAUTHN_ORIGIN,
+        "https://justalk.onrender.com",
+        "https://k.onrender.com",
+        "http://localhost:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:5173",
+    ]
 
 
 # --- Enregistrement / Inscription WebAuthn ---
@@ -191,13 +202,15 @@ def get_register_options(req: schemas.RegistrationOptionsRequest, request: Reque
             user_name=username,
             user_display_name=req.display_name or username,
             authenticator_selection=AuthenticatorSelectionCriteria(
-                authenticator_attachment=AuthenticatorAttachment.PLATFORM,  # FaceID/TouchID/Windows Hello
-                resident_key=ResidentKeyRequirement.REQUIRED,               # Passkeys requis
-                user_verification=UserVerificationRequirement.REQUIRED
+                # CROSS_PLATFORM accepte aussi les cles USB/NFC en plus de TouchID/FaceID
+                # Suppression de PLATFORM-only pour compatibilite maximale
+                resident_key=ResidentKeyRequirement.PREFERRED,
+                user_verification=UserVerificationRequirement.PREFERRED
             )
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur lors de la génération des options : {str(e)}")
+        print(f"[WebAuthn] register-options error: {e}")
+        raise HTTPException(status_code=500, detail=f"Erreur génération challenge : {str(e)}")
     
     # Stocker le challenge en mémoire pour validation à l'étape 2
     challenges_db[username] = {
@@ -226,15 +239,28 @@ def verify_register(req: schemas.RegistrationVerificationRequest, response: Resp
     rp_id = stored.get("rp_id", WEBAUTHN_RP_ID)
     origin = stored.get("origin", WEBAUTHN_ORIGIN)
     
-    try:
-        verification = verify_registration_response(
-            credential=req.registration_response,
-            expected_challenge=expected_challenge,
-            expected_origin=origin,
-            expected_rp_id=rp_id
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Vérification WebAuthn échouée : {str(e)}")
+    # Construire la liste des origines valides pour la verification
+    valid_origins = list(set([origin] + get_all_valid_origins()))
+    
+    last_error = None
+    verification = None
+    for try_origin in valid_origins:
+        try:
+            verification = verify_registration_response(
+                credential=req.registration_response,
+                expected_challenge=expected_challenge,
+                expected_origin=try_origin,
+                expected_rp_id=rp_id
+            )
+            print(f"[WebAuthn] register-verify OK avec origin={try_origin!r}")
+            break
+        except Exception as e:
+            last_error = e
+            continue
+    
+    if verification is None:
+        print(f"[WebAuthn] register-verify FAILED: {last_error}")
+        raise HTTPException(status_code=400, detail=f"Vérification WebAuthn échouée : {str(last_error)}")
     
     try:
         # Création de l'utilisateur
@@ -348,17 +374,30 @@ def verify_login(req: schemas.AuthenticationVerificationRequest, response: Respo
     if not db_cred:
         raise HTTPException(status_code=404, detail="Authentificateur non reconnu pour ce compte.")
     
-    try:
-        verification = verify_authentication_response(
-            credential=req.authentication_response,
-            expected_challenge=expected_challenge,
-            expected_rp_id=rp_id,
-            expected_origin=origin,
-            credential_public_key=base64url_to_bytes(db_cred.public_key),
-            credential_current_sign_count=db_cred.sign_count
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Authentification refusée : {str(e)}")
+    # Essayer toutes les origines valides pour la verification
+    valid_origins = list(set([origin] + get_all_valid_origins()))
+    
+    last_error = None
+    verification = None
+    for try_origin in valid_origins:
+        try:
+            verification = verify_authentication_response(
+                credential=req.authentication_response,
+                expected_challenge=expected_challenge,
+                expected_rp_id=rp_id,
+                expected_origin=try_origin,
+                credential_public_key=base64url_to_bytes(db_cred.public_key),
+                credential_current_sign_count=db_cred.sign_count
+            )
+            print(f"[WebAuthn] login-verify OK avec origin={try_origin!r}")
+            break
+        except Exception as e:
+            last_error = e
+            continue
+    
+    if verification is None:
+        print(f"[WebAuthn] login-verify FAILED: {last_error}")
+        raise HTTPException(status_code=400, detail=f"Authentification refusée : {str(last_error)}")
     
     # Mise à jour du compteur anti-replay
     db_cred.sign_count = verification.new_sign_count
