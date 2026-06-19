@@ -1297,11 +1297,23 @@ def create_message(req: schemas.MessageCreate, db: Session = Depends(database.ge
         conv.updated_at = datetime.now(timezone.utc)
         
         recipient_id = conv.user_two_id if conv.user_one_id == current_user.id else conv.user_one_id
-        db_notif = models.Notification(
-            user_id=recipient_id,
-            content=f"@{current_user.username} vous a envoyé un message."
-        )
-        db.add(db_notif)
+        
+        # Personnaliser le contenu de la notification pour les appels
+        notif_content = f"@{current_user.username} vous a envoyé un message."
+        if req.content:
+            if "manqué" in req.content:
+                notif_content = f"📞 Appel manqué de @{current_user.username}"
+            elif "en cours" in req.content:
+                notif_content = f"📞 Appel entrant de @{current_user.username}..."
+            elif "terminé" in req.content:
+                notif_content = None
+
+        if notif_content:
+            db_notif = models.Notification(
+                user_id=recipient_id,
+                content=notif_content
+            )
+            db.add(db_notif)
         
         db.commit()
         db.refresh(new_msg)

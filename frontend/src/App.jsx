@@ -1,9 +1,123 @@
 // frontend/src/App.jsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Login from "./components/Login";
 import Register from "./components/Register";
 import Feed from "./components/Feed";
 import { ShieldAlert, Loader2 } from "lucide-react";
+
+function ParticleBackground() {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    let animationFrameId;
+    let particles = [];
+
+    const colors = [
+      "rgba(24, 119, 242, 0.5)",  // Electric Blue
+      "rgba(236, 72, 153, 0.5)", // Neon Pink
+      "rgba(168, 85, 247, 0.5)", // Neon Purple
+      "rgba(16, 185, 129, 0.5)", // Emerald
+      "rgba(245, 158, 11, 0.5)"  // Amber
+    ];
+
+    const resizeCanvas = () => {
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      canvas.style.width = `${window.innerWidth}px`;
+      canvas.style.height = `${window.innerHeight}px`;
+      ctx.scale(dpr, dpr);
+      initParticles();
+    };
+
+    const initParticles = () => {
+      const particleCount = Math.min(65, Math.floor((window.innerWidth * window.innerHeight) / 16000));
+      particles = [];
+      for (let i = 0; i < particleCount; i++) {
+        particles.push({
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          vx: (Math.random() - 0.5) * 0.35,
+          vy: (Math.random() - 0.5) * 0.35,
+          radius: Math.random() * 2.5 + 1.2,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          pulseSpeed: 0.01 + Math.random() * 0.02,
+          pulseOffset: Math.random() * Math.PI * 2
+        });
+      }
+    };
+
+    let time = 0;
+    const animate = () => {
+      time += 1;
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+      // Draw connecting lines
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < 110) {
+            const alpha = (1 - dist / 110) * 0.12;
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Draw particles
+      particles.forEach((p) => {
+        // Move & Bounce
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0 || p.x > window.innerWidth) p.vx = -p.vx;
+        if (p.y < 0 || p.y > window.innerHeight) p.vy = -p.vy;
+
+        // Pulse size & opacity
+        const scale = 0.55 + Math.sin(time * p.pulseSpeed + p.pulseOffset) * 0.45;
+        const currentRadius = p.radius * scale;
+        
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, currentRadius, 0, Math.PI * 2);
+        
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = p.color;
+        ctx.fillStyle = p.color;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+    animate();
+
+    return () => {
+      window.removeEventListener("resize", resizeCanvas);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 w-full h-full pointer-events-none z-0"
+    />
+  );
+}
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -87,25 +201,25 @@ export default function App() {
 
   if (checkingSession) {
     return (
-      <div className="min-h-screen bg-bg flex flex-col items-center justify-center gap-4">
+      <div className="h-[100dvh] w-screen bg-[#090b11] flex flex-col items-center justify-center gap-4">
         <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg">
           <span className="text-white font-black text-3xl">J</span>
         </div>
         <Loader2 className="animate-spin text-blue-600" size={28} />
-        <p className="text-gray-500 font-semibold text-base">Chargement...</p>
+        <p className="text-gray-400 font-semibold text-base">Chargement...</p>
       </div>
     );
   }
 
   if (serverError) {
     return (
-      <div className="min-h-screen bg-bg flex flex-col items-center justify-center p-4">
+      <div className="h-[100dvh] w-screen bg-[#090b11] flex flex-col items-center justify-center p-4">
         <div className="card-lg max-w-md w-full flex flex-col items-center text-center gap-4">
           <div className="w-14 h-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center">
             <ShieldAlert size={28} />
           </div>
-          <h3 className="font-bold text-gray-900 text-xl">Erreur de connexion</h3>
-          <p className="text-gray-600 text-base leading-relaxed">{serverError}</p>
+          <h3 className="font-bold text-gray-100 text-xl">Erreur de connexion</h3>
+          <p className="text-gray-400 text-base leading-relaxed">{serverError}</p>
           <button onClick={checkSession} className="btn-primary px-8">Réessayer</button>
         </div>
       </div>
@@ -115,13 +229,15 @@ export default function App() {
   return (
     <>
       {view === "login" && (
-        <div className="min-h-screen bg-bg flex items-center justify-center p-4">
+        <div className="relative h-[100dvh] w-screen bg-[#090b11] flex items-center justify-center p-4 overflow-hidden select-none">
+          <ParticleBackground />
           <Login onLoginSuccess={handleLoginSuccess} onGoToRegister={() => setView("register")} />
         </div>
       )}
 
       {view === "register" && (
-        <div className="min-h-screen bg-bg flex items-center justify-center p-4">
+        <div className="relative h-[100dvh] w-screen bg-[#090b11] flex items-center justify-center p-4 overflow-hidden select-none">
+          <ParticleBackground />
           <Register onRegisterSuccess={handleRegisterSuccess} onGoToLogin={() => setView("login")} />
         </div>
       )}

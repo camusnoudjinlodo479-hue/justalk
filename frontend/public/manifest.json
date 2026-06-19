@@ -3,10 +3,11 @@
   "short_name": "Justalk",
   "description": "Réseau social avec authentification biométrique",
   "start_url": "/",
-  "display": "standalone",
-  "background_color": "#F0F2F5",
-  "theme_color": "#1877F2",
+  "display": "fullscreen",
+  "background_color": "#090b11",
+  "theme_color": "#090b11",
   "orientation": "portrait-primary",
+  "scope": "/",
   "icons": [
     {
       "src": "/icon-192.png",

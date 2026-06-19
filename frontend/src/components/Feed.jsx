@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 import { 
   Plus, Trash2, Heart, MessageCircle, Image, Send, X, Loader2, LogOut, 
   Users, Bell, Camera, Video, StopCircle, ChevronLeft, Mic, Film, 
-  Phone, Shield, User, Sparkles
+  Phone, Shield, User, Sparkles, PhoneCall, PhoneMissed, PhoneIncoming
 } from "lucide-react";
 import ReelFeed from "./ReelFeed";
 import ProfilePage from "./ProfilePage";
@@ -752,7 +752,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#090b11] text-white flex flex-col font-sans relative">
+    <div className="w-screen h-[100dvh] bg-[#090b11] text-white flex flex-col font-sans relative overflow-hidden">
       
       {/* WebRTC Calling Overlay */}
       {activeCall && (
@@ -1516,14 +1516,33 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                         key={m.id} 
                         className={`flex flex-col max-w-[80%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}
                       >
-                        <div className={`p-3 rounded-2xl text-xs leading-relaxed break-words shadow-sm ${
+                        <div className={`p-3 rounded-2xl text-xs leading-relaxed break-words shadow-sm flex items-center gap-3 ${
                           isCall 
-                            ? 'bg-slate-900 border border-white/5 text-slate-300' 
+                            ? 'bg-slate-900 border border-white/5 text-slate-300 min-w-[200px]' 
                             : isMe 
                               ? 'bg-blue-600 text-white rounded-br-none' 
                               : 'bg-[#1c2234] text-slate-200 border border-white/5 rounded-bl-none'
                         }`}>
-                          {m.content}
+                          {isCall && (
+                            <div className={`p-2 rounded-full ${
+                              m.content.includes("manqué")
+                                ? 'bg-red-500/10 text-red-500'
+                                : m.content.includes("terminé")
+                                  ? 'bg-green-500/10 text-green-500'
+                                  : 'bg-blue-500/10 text-blue-500 animate-pulse'
+                            }`}>
+                              {m.content.includes("manqué") ? (
+                                <PhoneMissed size={16} />
+                              ) : m.content.includes("terminé") ? (
+                                <PhoneCall size={16} />
+                              ) : (
+                                <PhoneIncoming size={16} />
+                              )}
+                            </div>
+                          )}
+                          <div className="flex-1">
+                            {m.content}
+                          </div>
                           
                           {m.image_url && (
                             <div className="mt-2 rounded-xl overflow-hidden max-w-[200px] border border-white/5">

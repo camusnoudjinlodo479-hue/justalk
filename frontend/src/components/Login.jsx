@@ -74,7 +74,7 @@ export default function Login({ onLoginSuccess, onGoToRegister }) {
   };
 
   return (
-    <div className="w-full max-w-md p-8 card-lg bg-white/95 backdrop-blur-sm relative overflow-hidden">
+    <div className="w-full max-w-md p-8 card-lg bg-white/80 backdrop-blur-lg border border-white/20 shadow-2xl relative overflow-hidden z-10">
       {/* Ligne décorative dégradée premium */}
       <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-electric via-blue-500 to-indigo-500" />
 

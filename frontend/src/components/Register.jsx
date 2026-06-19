@@ -172,7 +172,7 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
   };
 
   return (
-    <div className="w-full max-w-md p-8 card-lg bg-white/95 backdrop-blur-md relative overflow-hidden">
+    <div className="w-full max-w-md p-8 card-lg bg-white/80 backdrop-blur-lg border border-white/20 shadow-2xl relative overflow-hidden z-10">
       <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
       
       <div className="flex flex-col items-center text-center gap-5">

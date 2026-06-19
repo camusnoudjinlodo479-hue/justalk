@@ -1,14 +1,18 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" style="height:100%;overflow:hidden;">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#1877F2" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#090b11" />
     <meta name="description" content="Justalk — Le réseau social avec authentification biométrique. Posts, Stories, Reels, Messagerie et Appels vidéo." />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Justalk" />
+    <!-- Android fullscreen immersive mode -->
+    <meta name="screen-orientation" content="portrait" />
+    <meta name="full-screen" content="yes" />
+    <meta name="browsermode" content="application" />
 
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
@@ -21,8 +25,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   </head>
-  <body>
-    <div id="root"></div>
+  <body style="margin:0;padding:0;height:100%;overflow:hidden;background:#090b11;">
+    <div id="root" style="height:100%;"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
       // Register Service Worker pour PWA
