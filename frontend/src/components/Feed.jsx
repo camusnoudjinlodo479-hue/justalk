@@ -809,53 +809,22 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
           {/* Droite (Notifications et Profil) */}
           <div className="flex items-center gap-3">
             
-            {/* Popover Notifications */}
-            <div className="relative">
-              <button 
-                onClick={() => {
-                  setShowNotificationsDropdown(!showNotificationsDropdown);
-                  setShowUserDropdown(false);
-                  if (!showNotificationsDropdown) fetchNotifications();
-                }}
-                className={`p-2.5 rounded-xl transition-all relative ${showNotificationsDropdown ? 'bg-blue-600 text-white' : 'bg-[#1c2234] text-slate-300 hover:bg-slate-800'}`}
-              >
-                <Bell size={20} />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-[10px] font-bold text-white rounded-full flex items-center justify-center animate-bounce">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-
-              {/* Notification Popover Dropdown */}
-              {showNotificationsDropdown && (
-                <div className="absolute right-0 mt-3.5 w-80 bg-[#121620] border border-white/5 rounded-2xl shadow-2xl z-50 p-3">
-                  <h4 className="px-3 pb-2.5 font-display font-extrabold text-slate-200 text-sm border-b border-white/5 flex justify-between items-center">
-                    <span>Notifications</span>
-                    {notifications.length > 0 && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
-                  </h4>
-                  <div className="max-h-72 overflow-y-auto mt-2.5 flex flex-col gap-2 scrollbar-none">
-                    {notifications.map((notif) => (
-                      <div 
-                        key={notif.id}
-                        className={`p-3 rounded-xl text-xs text-slate-300 leading-normal flex items-start gap-2.5 transition-colors ${notif.is_read ? 'bg-transparent' : 'bg-blue-500/10 border border-blue-500/20 font-medium'}`}
-                      >
-                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                        <div className="flex-1">
-                          <p>{notif.content}</p>
-                          <span className="text-[10px] text-slate-500 mt-1 block">
-                            {new Date(notif.created_at).toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                    {notifications.length === 0 && (
-                      <p className="text-center py-8 text-slate-500 text-sm">Aucune notification.</p>
-                    )}
-                  </div>
-                </div>
+            {/* Bouton de redirection vers la page de notifications */}
+            <button 
+              onClick={() => {
+                setActiveView("notifications");
+                fetchNotifications();
+                setShowUserDropdown(false);
+              }}
+              className={`p-2.5 rounded-xl transition-all relative ${activeView === 'notifications' ? 'bg-blue-600 text-white' : 'bg-[#1c2234] text-slate-300 hover:bg-slate-800'}`}
+            >
+              <Bell size={20} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-[10px] font-bold text-white rounded-full flex items-center justify-center animate-bounce">
+                  {unreadCount}
+                </span>
               )}
-            </div>
+            </button>
 
             {/* Menu Utilisateur */}
             <div className="relative">
@@ -952,6 +921,18 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             >
               <MessageCircle size={20} />
               <span>Messenger</span>
+            </button>
+            <button 
+              onClick={() => { setActiveView("notifications"); fetchNotifications(); }}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${activeView === "notifications" ? "bg-blue-600 text-white shadow-md shadow-blue-500/10" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+            >
+              <Bell size={20} />
+              <span>Notifications</span>
+              {unreadCount > 0 && (
+                <span className="ml-auto w-5 h-5 bg-red-500 text-[10px] font-bold text-white rounded-full flex items-center justify-center">
+                  {unreadCount}
+                </span>
+              )}
             </button>
             <button 
               onClick={() => setActiveView("profile")}
@@ -1735,6 +1716,64 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             onLike={handleLike}
             onAddComment={handlePostComment}
           />
+        )}
+
+        {/* VIEW : NOTIFICATIONS (PLEIN ECRAN PAGE) */}
+        {activeView === "notifications" && (
+          <div className="w-full max-w-2xl mx-auto page-content flex flex-col gap-4">
+            
+            {/* Header Notifications */}
+            <div className="flex justify-between items-center bg-[#121620] border-x-0 sm:border-x border-t-0 sm:border-t border-b border-white/5 rounded-none sm:rounded-2xl p-4 shadow-sm shrink-0">
+              <div className="flex items-center gap-2">
+                <Bell className="text-blue-500" size={24} />
+                <h2 className="font-display font-extrabold text-lg text-white">Notifications</h2>
+              </div>
+            </div>
+
+            {/* Liste Notifications */}
+            <div className="card p-0 overflow-hidden rounded-none sm:rounded-2xl flex flex-col bg-[#121620] border-x-0 sm:border-x border-t-0 sm:border-t border-b sm:border-b border-white/5">
+              <div className="divide-y divide-white/5 max-h-[calc(100vh-14rem)] overflow-y-auto scrollbar-none">
+                {notifications.map((notif) => (
+                  <div 
+                    key={notif.id}
+                    className={`p-4 flex items-start gap-4 transition-colors hover:bg-white/5 ${notif.is_read ? 'bg-transparent' : 'bg-blue-500/10 border-l-4 border-blue-500'}`}
+                  >
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
+                      {notif.sender_avatar_url ? (
+                        <img src={notif.sender_avatar_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <Bell size={18} />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm text-slate-200 leading-normal ${notif.is_read ? 'font-normal' : 'font-semibold'}`}>
+                        {notif.content}
+                      </p>
+                      <span className="text-[11px] text-slate-500 mt-1 block font-medium">
+                        {new Date(notif.created_at).toLocaleDateString("fr-FR", {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                    {!notif.is_read && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 mt-2" />
+                    )}
+                  </div>
+                ))}
+                {notifications.length === 0 && (
+                  <div className="text-center py-20 text-slate-500 text-sm flex flex-col items-center gap-2">
+                    <Bell size={36} className="text-slate-700" />
+                    <p className="font-semibold">Aucune notification.</p>
+                    <p className="text-xs">Vous serez notifié lorsque des amis aimeront ou commenteront vos posts !</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
         )}
 
         </div>
