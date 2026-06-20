@@ -345,13 +345,23 @@
     }
   }
 
-  /* ===== POST CARD ===== */
   .post-card {
     background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 1.25rem;
-    margin-bottom: 1.25rem;
+    border-top: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
+    border-left: none;
+    border-right: none;
+    border-radius: 0;
+    margin-bottom: 0.65rem;
     overflow: hidden;
+    width: 100%;
+  }
+  @media (min-width: 640px) {
+    .post-card {
+      border: 1px solid var(--border-color);
+      border-radius: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
   }
   .post-action-btn {
     flex: 1;
@@ -403,9 +413,18 @@
   overflow-y: scroll;
   scroll-snap-type: y mandatory;
   scrollbar-width: none;
-  border-radius: 1.5rem;
+  border-radius: 0;
   background: #000000;
   border: 1px solid var(--border-color);
+  border-left: none;
+  border-right: none;
+}
+@media (min-width: 640px) {
+  .reels-container {
+    border-radius: 1.5rem;
+    border-left: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+  }
 }
 .reels-container::-webkit-scrollbar { display: none; }
 .reel-item {

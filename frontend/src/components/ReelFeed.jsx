@@ -116,7 +116,7 @@ export default function ReelFeed({ currentUser }) {
     <div className="w-full flex flex-col gap-4 max-w-3xl mx-auto page-content">
       
       {/* En-tête Reels */}
-      <div className="flex justify-between items-center bg-slate-900/40 border border-white/5 rounded-2xl p-4 backdrop-blur-md shrink-0">
+      <div className="flex justify-between items-center bg-slate-900/40 border-x-0 sm:border-x border-t-0 sm:border-t border-b border-white/5 rounded-none sm:rounded-2xl p-4 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-2">
           <Film className="text-blue-500" size={24} />
           <h2 className="font-display font-extrabold text-xl sm:text-2xl text-white">Reels</h2>
@@ -165,7 +165,7 @@ export default function ReelFeed({ currentUser }) {
         )
       ) : (
         /* Formulaire d'upload */
-        <div className="card bg-slate-900 border border-white/10 rounded-3xl p-6 flex flex-col gap-4 animate-scaleIn">
+        <div className="card bg-slate-900 border-x-0 sm:border-x border-t-0 sm:border-t border-b sm:border-b border-white/10 rounded-none sm:rounded-3xl p-6 flex flex-col gap-4 animate-scaleIn">
           <div className="flex items-center gap-2 mb-2">
             <button
               onClick={() => { setShowUploadForm(false); clearUpload(); }}

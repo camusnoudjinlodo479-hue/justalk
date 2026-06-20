@@ -904,7 +904,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
       </header>
 
       {/* ZONE PRINCIPALE DE CONTENU */}
-      <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 md:px-6 lg:px-8 pb-4 flex gap-6 overflow-hidden pt-16">
+      <main className="flex-1 w-full max-w-[1400px] mx-auto px-0 sm:px-4 md:px-6 lg:px-8 pb-4 flex gap-6 overflow-hidden pt-16">
         
         {/* BARRE LATERALE GAUCHE (Desktop seulement) */}
         <aside className="hidden md:flex flex-col gap-5 w-64 shrink-0 py-6 border-r border-white/5 pr-6 h-full overflow-y-auto mt-2">
@@ -980,7 +980,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             <div className="flex flex-col gap-6 max-w-3xl mx-auto w-full page-content">
             
             {/* STORIES HORIZONTALES */}
-            <div className="w-full flex gap-3.5 overflow-x-auto pb-2 scrollbar-none shrink-0 pt-2">
+            <div className="w-full flex gap-3.5 overflow-x-auto pb-2 scrollbar-none shrink-0 pt-2 px-4 sm:px-0">
               {/* Créer une story */}
               <div className="flex flex-col items-center gap-1.5 shrink-0 select-none">
                 <div 
@@ -1030,7 +1030,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             </div>
 
             {/* COMPOSER DE POST */}
-            <div className="card bg-[#121620] border-white/5 p-4 rounded-2xl flex flex-col gap-4 relative">
+            <div className="card bg-[#121620] border-white/5 p-4 rounded-none sm:rounded-2xl border-x-0 sm:border-x flex flex-col gap-4 relative">
               <div className="flex gap-3">
                 <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-extrabold text-base shrink-0 shadow-inner overflow-hidden border border-white/10">
                   {currentUser.avatar_url ? (
@@ -1331,7 +1331,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
           <div className="w-full max-w-3xl mx-auto page-content flex flex-col gap-5">
             
             {/* Header Amis */}
-            <div className="flex justify-between items-center bg-[#121620] border border-white/5 rounded-2xl p-4 shadow-sm shrink-0">
+            <div className="flex justify-between items-center bg-[#121620] border-x-0 sm:border-x border-t-0 sm:border-t border-b border-white/5 rounded-none sm:rounded-2xl p-4 shadow-sm shrink-0">
               <div className="flex items-center gap-2">
                 <Users className="text-blue-500" size={24} />
                 <h2 className="font-display font-extrabold text-lg text-white">Gestion d'Amis</h2>
@@ -1339,7 +1339,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             </div>
 
             {/* Onglets Amis */}
-            <div className="card p-0 overflow-hidden rounded-2xl flex flex-col bg-[#121620] border border-white/5">
+            <div className="card p-0 overflow-hidden rounded-none sm:rounded-2xl flex flex-col bg-[#121620] border-x-0 sm:border-x border-t-0 sm:border-t border-b sm:border-b border-white/5">
               <div className="flex border-b border-white/5 bg-slate-950/20 shrink-0">
                 <button
                   onClick={() => setActiveFriendTab("my-friends")}
@@ -1489,14 +1489,14 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             
             {!selectedConversation ? (
               <>
-                <div className="flex justify-between items-center bg-[#121620] border border-white/5 rounded-2xl p-4 shadow-sm shrink-0">
+                <div className="flex justify-between items-center bg-[#121620] border-x-0 sm:border-x border-t-0 sm:border-t border-b border-white/5 rounded-none sm:rounded-2xl p-4 shadow-sm shrink-0">
                   <div className="flex items-center gap-2">
                     <MessageCircle className="text-blue-500" size={24} />
                     <h2 className="font-display font-extrabold text-lg text-white">Messagerie</h2>
                   </div>
                 </div>
 
-                <div className="card bg-[#121620] border border-white/5 rounded-2xl p-3.5 flex flex-col gap-1.5 min-h-[400px] md:h-[calc(100vh-12rem)] md:min-h-[500px] overflow-y-auto scrollbar-none">
+                <div className="card bg-[#121620] border-x-0 sm:border-x border-t-0 sm:border-t border-b sm:border-b border-white/5 rounded-none sm:rounded-2xl p-3.5 flex flex-col gap-1.5 min-h-[400px] md:h-[calc(100vh-12rem)] md:min-h-[500px] overflow-y-auto scrollbar-none">
                   {conversations.length > 0 ? (
                     conversations.map((c) => (
                       <div 
@@ -1554,7 +1554,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
               </>
             ) : (
               /* Fenêtre de discussion active */
-              <div className="card bg-[#121620] border-white/5 rounded-3xl p-0 flex flex-col h-[520px] md:h-[calc(100vh-10rem)] md:min-h-[580px] overflow-hidden animate-scaleIn">
+              <div className="card bg-[#121620] border-x-0 sm:border-x border-t-0 sm:border-t border-b sm:border-b border-white/5 rounded-none sm:rounded-3xl p-0 flex flex-col h-[520px] md:h-[calc(100vh-10rem)] md:min-h-[580px] overflow-hidden animate-scaleIn">
                 {/* Chat Header */}
                 <div className="p-4 border-b border-white/5 flex justify-between items-center bg-slate-950/20 shrink-0">
                   <div className="flex items-center gap-3 min-w-0">

@@ -89,7 +89,7 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
     <div className="w-full flex flex-col gap-6 max-w-3xl mx-auto page-content">
       
       {/* 1. SECTION COUVERTURE & AVATAR */}
-      <div className="card p-0 overflow-hidden relative shadow-lg bg-slate-900/60 border border-white/5 rounded-3xl">
+      <div className="card p-0 overflow-hidden relative shadow-lg bg-slate-900/60 border-x-0 sm:border-x border-t-0 sm:border-t border-b sm:border-b border-white/5 rounded-none sm:rounded-3xl">
         {/* Photo de Couverture */}
         <div className="w-full h-48 sm:h-60 relative bg-gradient-to-r from-blue-900/80 via-slate-800 to-indigo-950/80 overflow-hidden">
           {currentUser.cover_url ? (
