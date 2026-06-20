@@ -767,7 +767,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
       )}
 
       {/* 1. HEADER NAV PREMIUM */}
-      <header className="fixed top-0 inset-x-0 h-16 bg-[#121620]/85 backdrop-blur-md border-b border-white/5 shadow-md z-40">
+      <header className="top-header">
         <div className="h-full max-w-[1400px] mx-auto px-4 md:px-6 lg:px-8 flex items-center justify-between">
           <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveView("feed")}>
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-2xl shadow-md">
@@ -904,7 +904,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
       </header>
 
       {/* ZONE PRINCIPALE DE CONTENU */}
-      <main className="flex-1 w-full max-w-[1400px] mx-auto px-0 sm:px-4 md:px-6 lg:px-8 pb-4 flex gap-6 overflow-hidden pt-16">
+      <main className="flex-1 w-full max-w-[1400px] mx-auto px-0 sm:px-4 md:px-6 lg:px-8 pb-4 flex gap-6 overflow-hidden pt-[calc(4rem+env(safe-area-inset-top))]">
         
         {/* BARRE LATERALE GAUCHE (Desktop seulement) */}
         <aside className="hidden md:flex flex-col gap-5 w-64 shrink-0 py-6 border-r border-white/5 pr-6 h-full overflow-y-auto mt-2">
@@ -1554,7 +1554,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
               </>
             ) : (
               /* Fenêtre de discussion active */
-              <div className="card bg-[#121620] border-x-0 sm:border-x border-t-0 sm:border-t border-b sm:border-b border-white/5 rounded-none sm:rounded-3xl p-0 flex flex-col h-[520px] md:h-[calc(100vh-10rem)] md:min-h-[580px] overflow-hidden animate-scaleIn">
+              <div className="card bg-[#121620] border-x-0 sm:border-x border-t-0 sm:border-t border-b sm:border-b border-white/5 rounded-none sm:rounded-3xl p-0 flex flex-col h-full md:h-[calc(100vh-10rem)] md:min-h-[580px] overflow-hidden animate-scaleIn">
                 {/* Chat Header */}
                 <div className="p-4 border-b border-white/5 flex justify-between items-center bg-slate-950/20 shrink-0">
                   <div className="flex items-center gap-3 min-w-0">
