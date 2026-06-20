@@ -1032,7 +1032,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             {/* COMPOSER DE POST */}
             <div className="card bg-[#121620] border-white/5 p-4 rounded-2xl flex flex-col gap-4 relative">
               <div className="flex gap-3">
-                <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-inner overflow-hidden border border-white/10">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-extrabold text-base shrink-0 shadow-inner overflow-hidden border border-white/10">
                   {currentUser.avatar_url ? (
                     <img src={currentUser.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
@@ -1045,7 +1045,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder={`À quoi pensez-vous, ${currentUser.display_name || currentUser.username} ?`}
-                    className="w-full min-h-[75px] p-1 bg-transparent text-slate-200 placeholder:text-slate-500 focus:outline-none resize-none text-sm sm:text-base leading-relaxed"
+                    className="w-full min-h-[75px] p-1 bg-transparent text-slate-200 placeholder:text-slate-500 focus:outline-none resize-none text-base sm:text-lg leading-relaxed"
                     maxLength={280}
                     disabled={publishing}
                   />
@@ -1161,9 +1161,9 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                     <button
                       type="submit"
                       disabled={publishing || (!content.trim() && !mediaFile)}
-                      className="btn-primary py-2.5 px-4.5 text-sm font-bold rounded-xl"
+                      className="btn-primary py-3 px-5 text-base font-extrabold rounded-xl cursor-pointer"
                     >
-                      {publishing ? <Loader2 size={13} className="animate-spin" /> : "Partager"}
+                      {publishing ? <Loader2 size={15} className="animate-spin" /> : "Partager"}
                     </button>
                   </div>
                 </form>
@@ -1266,7 +1266,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                         <span>Commenter</span>
                       </button>
                     </div>
-
+ 
                     {/* Formulaire & Liste commentaires */}
                     {activeCommentPostId === post.id && (
                       <div className="p-4 border-t border-white/5 bg-slate-950/40 flex flex-col gap-3">
@@ -1276,30 +1276,30 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                             placeholder="Écrire un commentaire..."
                             value={commentText}
                             onChange={(e) => setCommentText(e.target.value)}
-                            className="flex-1 input-pill bg-[#090b11] border-white/5 text-sm py-2.5 px-3.5 focus:bg-[#121620]"
+                            className="flex-1 input-pill bg-[#090b11] border-white/5 text-base py-3.5 px-4.5 focus:bg-[#121620]"
                             required
                           />
                           <button
                             type="submit"
-                            className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                            className="p-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shrink-0"
                           >
-                            <Send size={15} />
+                            <Send size={18} />
                           </button>
                         </form>
-
+ 
                         <div className="flex flex-col gap-2.5 max-h-48 overflow-y-auto pr-1 scrollbar-none">
                           {post.comments && post.comments.map((comment) => (
-                            <div key={comment.id} className="flex gap-2.5 items-start text-xs">
-                              <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shrink-0 border border-slate-700 overflow-hidden">
+                            <div key={comment.id} className="flex gap-2.5 items-start text-sm sm:text-base">
+                              <div className="w-9.5 h-9.5 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-sm shrink-0 border border-slate-700 overflow-hidden">
                                 {comment.author_avatar_url ? (
                                   <img src={comment.author_avatar_url} alt="" className="w-full h-full object-cover" />
                                 ) : (
                                   comment.author_display_name?.[0]?.toUpperCase() || comment.author_username?.[0]?.toUpperCase() || "U"
                                 )}
                               </div>
-                              <div className="flex-1 bg-slate-900 rounded-xl p-2 border border-slate-800/80">
-                                <p className="font-bold text-slate-300">{comment.author_display_name || comment.author_username}</p>
-                                <p className="text-slate-400 mt-0.5 leading-relaxed">{comment.content}</p>
+                              <div className="flex-1 bg-slate-900 rounded-xl p-3 border border-slate-800/80">
+                                <p className="font-bold text-slate-200">{comment.author_display_name || comment.author_username}</p>
+                                <p className="text-slate-300 mt-1 leading-relaxed">{comment.content}</p>
                               </div>
                             </div>
                           ))}

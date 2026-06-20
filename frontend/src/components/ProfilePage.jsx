@@ -261,7 +261,7 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
                   <span>Commenter</span>
                 </button>
               </div>
-
+ 
               {/* Formulaire & Liste commentaires */}
               {activeCommentId === post.id && (
                 <div className="p-4 border-t border-white/5 bg-slate-900/20 flex flex-col gap-3">
@@ -272,22 +272,22 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
                       placeholder="Écrire un commentaire..."
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
-                      className="flex-1 input-pill bg-slate-900 text-sm sm:text-base py-3 px-4 border border-slate-800"
+                      className="flex-1 input-pill bg-slate-900 text-base py-3.5 px-4.5 border border-slate-800 focus:bg-[#121620]"
                       required
                     />
                     <button
                       type="submit"
-                      className="p-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                      className="p-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shrink-0"
                     >
                       <Send size={18} />
                     </button>
                   </form>
-
+ 
                   {/* Liste commentaires */}
                   <div className="flex flex-col gap-2.5 max-h-48 overflow-y-auto pr-1 scrollbar-none">
                     {post.comments && post.comments.map((comment) => (
-                      <div key={comment.id} className="flex gap-2.5 items-start text-xs sm:text-sm">
-                        <div className="w-9 h-9 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 border border-slate-700 overflow-hidden">
+                      <div key={comment.id} className="flex gap-2.5 items-start text-sm sm:text-base">
+                        <div className="w-9.5 h-9.5 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-sm shrink-0 border border-slate-700 overflow-hidden">
                           {comment.author_avatar_url ? (
                             <img src={comment.author_avatar_url} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -295,8 +295,8 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
                           )}
                         </div>
                         <div className="flex-1 bg-slate-900 rounded-xl p-3 border border-slate-800/80">
-                          <p className="font-bold text-slate-300">{comment.author_display_name || comment.author_username}</p>
-                          <p className="text-slate-400 mt-1 leading-relaxed">{comment.content}</p>
+                          <p className="font-bold text-slate-200">{comment.author_display_name || comment.author_username}</p>
+                          <p className="text-slate-300 mt-1 leading-relaxed">{comment.content}</p>
                         </div>
                       </div>
                     ))}
