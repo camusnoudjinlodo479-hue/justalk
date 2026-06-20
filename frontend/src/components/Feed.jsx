@@ -768,18 +768,18 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
 
       {/* 1. HEADER NAV PREMIUM */}
       <header className="fixed top-0 inset-x-0 h-16 bg-[#121620]/85 backdrop-blur-md border-b border-white/5 shadow-md z-40">
-        <div className="h-full max-w-4xl mx-auto px-4 flex items-center justify-between">
+        <div className="h-full max-w-[1400px] mx-auto px-4 md:px-6 lg:px-8 flex items-center justify-between">
           <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveView("feed")}>
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-xl shadow-md">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-2xl shadow-md">
               J
             </div>
-            <span className="font-display font-black text-lg tracking-tight text-white hidden sm:inline">
+            <span className="font-display font-black text-xl tracking-tight text-white hidden sm:inline">
               Justalk
             </span>
           </div>
 
-          {/* Navigation au centre (Desktop/Tablette) */}
-          <nav className="hidden sm:flex items-center gap-1.5 bg-slate-900/50 p-1.5 rounded-2xl border border-white/5">
+          {/* Navigation au centre (Visible sur Tablette, masquée sur Mobile et Desktop) */}
+          <nav className="hidden sm:flex md:hidden items-center gap-1.5 bg-slate-900/50 p-1.5 rounded-2xl border border-white/5">
             <button 
               onClick={() => setActiveView("feed")}
               className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${activeView === "feed" ? "bg-blue-600 text-white shadow-md" : "text-slate-400 hover:text-white"}`}
@@ -807,7 +807,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
           </nav>
 
           {/* Droite (Notifications et Profil) */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             
             {/* Popover Notifications */}
             <div className="relative">
@@ -819,9 +819,9 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                 }}
                 className={`p-2.5 rounded-xl transition-all relative ${showNotificationsDropdown ? 'bg-blue-600 text-white' : 'bg-[#1c2234] text-slate-300 hover:bg-slate-800'}`}
               >
-                <Bell size={18} />
+                <Bell size={20} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-[9px] font-bold text-white rounded-full flex items-center justify-center animate-bounce">
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-[10px] font-bold text-white rounded-full flex items-center justify-center animate-bounce">
                     {unreadCount}
                   </span>
                 )}
@@ -829,28 +829,28 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
 
               {/* Notification Popover Dropdown */}
               {showNotificationsDropdown && (
-                <div className="absolute right-0 mt-3.5 w-80 bg-[#121620] border border-white/5 rounded-2xl shadow-2xl z-50 p-2.5">
-                  <h4 className="px-3 pb-2 font-display font-extrabold text-slate-200 text-xs border-b border-white/5 flex justify-between items-center">
+                <div className="absolute right-0 mt-3.5 w-80 bg-[#121620] border border-white/5 rounded-2xl shadow-2xl z-50 p-3">
+                  <h4 className="px-3 pb-2.5 font-display font-extrabold text-slate-200 text-sm border-b border-white/5 flex justify-between items-center">
                     <span>Notifications</span>
                     {notifications.length > 0 && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
                   </h4>
-                  <div className="max-h-72 overflow-y-auto mt-2 flex flex-col gap-1.5 scrollbar-none">
+                  <div className="max-h-72 overflow-y-auto mt-2.5 flex flex-col gap-2 scrollbar-none">
                     {notifications.map((notif) => (
                       <div 
                         key={notif.id}
-                        className={`p-3 rounded-xl text-[10px] text-slate-300 leading-normal flex items-start gap-2.5 transition-colors ${notif.is_read ? 'bg-transparent' : 'bg-blue-500/10 border border-blue-500/20 font-medium'}`}
+                        className={`p-3 rounded-xl text-xs text-slate-300 leading-normal flex items-start gap-2.5 transition-colors ${notif.is_read ? 'bg-transparent' : 'bg-blue-500/10 border border-blue-500/20 font-medium'}`}
                       >
                         <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
                         <div className="flex-1">
                           <p>{notif.content}</p>
-                          <span className="text-[8px] text-slate-500 mt-1 block">
+                          <span className="text-[10px] text-slate-500 mt-1 block">
                             {new Date(notif.created_at).toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                       </div>
                     ))}
                     {notifications.length === 0 && (
-                      <p className="text-center py-8 text-slate-500 text-xs">Aucune notification.</p>
+                      <p className="text-center py-8 text-slate-500 text-sm">Aucune notification.</p>
                     )}
                   </div>
                 </div>
@@ -864,7 +864,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                   setShowUserDropdown(!showUserDropdown);
                   setShowNotificationsDropdown(false);
                 }}
-                className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm border border-white/10 shadow-sm cursor-pointer overflow-hidden"
+                className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm border border-white/10 shadow-sm cursor-pointer overflow-hidden"
               >
                 {currentUser.avatar_url ? (
                   <img src={currentUser.avatar_url} alt="" className="w-full h-full object-cover" />
@@ -880,9 +880,9 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                       setActiveView("profile");
                       setShowUserDropdown(false);
                     }}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs text-slate-200 hover:bg-white/5 rounded-xl transition-all font-semibold"
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-slate-200 hover:bg-white/5 rounded-xl transition-all font-semibold"
                   >
-                    <User size={13} />
+                    <User size={15} />
                     Mon Profil
                   </button>
                   <button
@@ -890,9 +890,9 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                       setShowUserDropdown(false);
                       onLogout();
                     }}
-                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-xs text-red-500 hover:bg-red-500/10 rounded-xl transition-all font-semibold"
+                    className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm text-red-500 hover:bg-red-500/10 rounded-xl transition-all font-semibold"
                   >
-                    <LogOut size={13} />
+                    <LogOut size={15} />
                     Se déconnecter
                   </button>
                 </div>
@@ -904,11 +904,80 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
       </header>
 
       {/* ZONE PRINCIPALE DE CONTENU */}
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 pb-24">
+      <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 md:px-6 lg:px-8 pb-4 flex gap-6 overflow-hidden pt-16">
         
-        {/* VIEW : FIL D'ACTUALITES */}
-        {activeView === "feed" && (
-          <div className="flex flex-col gap-6 max-w-2xl mx-auto page-content">
+        {/* BARRE LATERALE GAUCHE (Desktop seulement) */}
+        <aside className="hidden md:flex flex-col gap-5 w-64 shrink-0 py-6 border-r border-white/5 pr-6 h-full overflow-y-auto mt-2">
+          {/* Bloc Utilisateur */}
+          <div className="flex items-center gap-3.5 p-3.5 rounded-2xl bg-white/5 border border-white/5 shadow-sm">
+            <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm overflow-hidden shrink-0 border border-white/10 shadow-inner">
+              {currentUser.avatar_url ? (
+                <img src={currentUser.avatar_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                currentUser.display_name?.[0]?.toUpperCase() || currentUser.username?.[0]?.toUpperCase() || "U"
+              )}
+            </div>
+            <div className="min-w-0">
+              <h4 className="text-sm font-extrabold text-slate-200 truncate">{currentUser.display_name || currentUser.username}</h4>
+              <p className="text-xs text-slate-500 truncate">@{currentUser.username}</p>
+            </div>
+          </div>
+
+          {/* Liens de Navigation */}
+          <nav className="flex flex-col gap-1.5">
+            <button 
+              onClick={() => setActiveView("feed")}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${activeView === "feed" ? "bg-blue-600 text-white shadow-md shadow-blue-500/10" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+            >
+              <Users size={20} />
+              <span>Fil d'actualités</span>
+            </button>
+            <button 
+              onClick={() => setActiveView("reels")}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${activeView === "reels" ? "bg-blue-600 text-white shadow-md shadow-blue-500/10" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+            >
+              <Film size={20} />
+              <span>Reels</span>
+            </button>
+            <button 
+              onClick={() => setActiveView("friends")}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${activeView === "friends" ? "bg-blue-600 text-white shadow-md shadow-blue-500/10" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+            >
+              <Users size={20} />
+              <span>Amis</span>
+            </button>
+            <button 
+              onClick={() => setActiveView("messenger")}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${activeView === "messenger" ? "bg-blue-600 text-white shadow-md shadow-blue-500/10" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+            >
+              <MessageCircle size={20} />
+              <span>Messenger</span>
+            </button>
+            <button 
+              onClick={() => setActiveView("profile")}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold transition-all ${activeView === "profile" ? "bg-blue-600 text-white shadow-md shadow-blue-500/10" : "text-slate-400 hover:text-white hover:bg-white/5"}`}
+            >
+              <User size={20} />
+              <span>Profil</span>
+            </button>
+          </nav>
+
+          {/* Déconnexion */}
+          <button 
+            onClick={onLogout}
+            className="w-full mt-auto flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-bold text-red-500 hover:bg-red-500/10 transition-all"
+          >
+            <LogOut size={20} />
+            <span>Se déconnecter</span>
+          </button>
+        </aside>
+
+        {/* CONTENU CENTRAL POUR LES ONGLETS (Flex-1) */}
+        <div className="flex-1 h-full overflow-hidden flex flex-col">
+
+          {/* VIEW : FIL D'ACTUALITES */}
+          {activeView === "feed" && (
+            <div className="flex flex-col gap-6 max-w-3xl mx-auto w-full page-content">
             
             {/* STORIES HORIZONTALES */}
             <div className="w-full flex gap-3.5 overflow-x-auto pb-2 scrollbar-none shrink-0 pt-2">
@@ -925,7 +994,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                     <Plus size={18} />
                   )}
                 </div>
-                <span className="text-[9px] text-slate-400 font-bold max-w-[60px] truncate">Créer story</span>
+                <span className="text-xs text-slate-400 font-bold max-w-[60px] truncate">Créer story</span>
                 <input 
                   type="file"
                   ref={storyFileInputRef}
@@ -953,7 +1022,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                       )}
                     </div>
                   </div>
-                  <span className="text-[9px] text-slate-400 font-bold max-w-[60px] truncate">
+                  <span className="text-xs text-slate-400 font-bold max-w-[60px] truncate">
                     {story.author_display_name || story.author_username}
                   </span>
                 </div>
@@ -963,7 +1032,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             {/* COMPOSER DE POST */}
             <div className="card bg-[#121620] border-white/5 p-4 rounded-2xl flex flex-col gap-4 relative">
               <div className="flex gap-3">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-inner overflow-hidden border border-white/10">
+                <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shrink-0 shadow-inner overflow-hidden border border-white/10">
                   {currentUser.avatar_url ? (
                     <img src={currentUser.avatar_url} alt="" className="w-full h-full object-cover" />
                   ) : (
@@ -976,7 +1045,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder={`À quoi pensez-vous, ${currentUser.display_name || currentUser.username} ?`}
-                    className="w-full min-h-[70px] p-1 bg-transparent text-slate-200 placeholder:text-slate-500 focus:outline-none resize-none text-xs leading-relaxed"
+                    className="w-full min-h-[75px] p-1 bg-transparent text-slate-200 placeholder:text-slate-500 focus:outline-none resize-none text-sm sm:text-base leading-relaxed"
                     maxLength={280}
                     disabled={publishing}
                   />
@@ -992,7 +1061,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                         className="w-full h-full object-cover transform scale-x-[-1]"
                       />
                       {isRecording && (
-                        <div className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse shadow-md">
+                        <div className="absolute top-3 left-3 bg-red-600 text-white text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 animate-pulse shadow-md">
                           <span className="w-1.5 h-1.5 rounded-full bg-white block" />
                           <span>REC {formatTime(recordingTime)}</span>
                         </div>
@@ -1003,25 +1072,25 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                             <button
                               type="button"
                               onClick={takePhoto}
-                              className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-950 font-bold rounded-xl text-[10px] shadow-sm flex items-center gap-1 active:scale-95 transition-all"
+                              className="px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-950 font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 active:scale-95 transition-all"
                             >
-                              <Camera size={12} />
+                              <Camera size={14} />
                               Photo
                             </button>
                             <button
                               type="button"
                               onClick={startRecording}
-                              className="px-3.5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-[10px] shadow-sm flex items-center gap-1 active:scale-95 transition-all"
+                              className="px-3.5 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 active:scale-95 transition-all"
                             >
-                              <Video size={12} />
+                              <Video size={14} />
                               Vidéo
                             </button>
                             <button
                               type="button"
                               onClick={stopCamera}
-                              className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-[10px] shadow-sm flex items-center gap-1 active:scale-95 transition-all"
+                              className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 active:scale-95 transition-all"
                             >
-                              <X size={12} />
+                              <X size={14} />
                               Fermer
                             </button>
                           </>
@@ -1029,9 +1098,9 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                           <button
                             type="button"
                             onClick={stopRecording}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-[10px] shadow-sm flex items-center gap-1 animate-pulse"
+                            className="px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs shadow-sm flex items-center gap-1.5 animate-pulse"
                           >
-                            <StopCircle size={12} />
+                            <StopCircle size={14} />
                             Arrêter
                           </button>
                         )}
@@ -1064,19 +1133,19 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-white px-2.5 py-1.5 rounded-xl hover:bg-white/5 transition-all"
+                        className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white px-3 py-2 rounded-xl hover:bg-white/5 transition-all"
                         disabled={publishing}
                       >
-                        <Image size={14} className="text-green-500" />
+                        <Image size={16} className="text-green-500" />
                         Photo/Vidéo
                       </button>
                       <button
                         type="button"
                         onClick={startCamera}
-                        className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-white px-2.5 py-1.5 rounded-xl hover:bg-white/5 transition-all"
+                        className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white px-3 py-2 rounded-xl hover:bg-white/5 transition-all"
                         disabled={publishing}
                       >
-                        <Camera size={14} className="text-blue-500" />
+                        <Camera size={16} className="text-blue-500" />
                         Caméra
                       </button>
                     </div>
@@ -1092,7 +1161,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                     <button
                       type="submit"
                       disabled={publishing || (!content.trim() && !mediaFile)}
-                      className="btn-primary py-2 px-4 text-xs font-bold rounded-xl"
+                      className="btn-primary py-2.5 px-4.5 text-sm font-bold rounded-xl"
                     >
                       {publishing ? <Loader2 size={13} className="animate-spin" /> : "Partager"}
                     </button>
@@ -1109,13 +1178,17 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                   <span className="text-xs text-slate-400">Récupération des publications...</span>
                 </div>
               ) : (
-                posts.map((post) => (
-                  <div key={post.id} className="post-card card p-0">
+                posts.map((post, index) => (
+                  <div 
+                    key={post.id} 
+                    className="post-card card p-0 animate-post"
+                    style={{ animationDelay: `${Math.min(index, 8) * 80}ms` }}
+                  >
                     
                     {/* Header post */}
                     <div className="p-4 flex justify-between items-center">
                       <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden border border-white/5">
+                        <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm overflow-hidden border border-white/5">
                           {post.author_avatar_url ? (
                             <img src={post.author_avatar_url} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -1123,44 +1196,51 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                           )}
                         </div>
                         <div>
-                          <h4 className="text-xs font-bold text-slate-200 leading-snug">{post.author_display_name || post.author_username}</h4>
-                          <span className="text-[8px] text-slate-500 leading-none">
+                          <h4 className="text-sm font-bold text-slate-200 leading-snug">{post.author_display_name || post.author_username}</h4>
+                          <span className="text-xs text-slate-500 leading-none">
                             {new Date(post.created_at).toLocaleDateString("fr-FR", { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                       </div>
                     </div>
-
+ 
                     {/* Contenu post */}
                     {post.content && (
-                      <p className="px-4 pb-3 text-xs leading-relaxed text-slate-300 white-space-pre-wrap">{post.content}</p>
+                      <p className={`px-4 pb-3 leading-relaxed text-slate-100 whitespace-pre-wrap ${
+                        post.content.length < 100 && !post.image_url && !post.video_url
+                          ? "text-base sm:text-lg font-bold"
+                          : "text-sm sm:text-base"
+                      }`}>{post.content}</p>
                     )}
-
+ 
                     {/* Médias post */}
                     {post.image_url && (
-                      <div className="border-t border-b border-white/5 bg-black/10 overflow-hidden max-h-[380px] flex items-center justify-center">
-                        <img src={post.image_url} alt="Publication" className="w-full object-contain max-h-[380px]" />
+                      <div className="border-t border-b border-white/5 bg-black/20 overflow-hidden max-h-[550px] w-full flex items-center justify-center cursor-pointer transition-all hover:brightness-95">
+                        <img src={post.image_url} alt="Publication" className="w-full h-full object-cover max-h-[550px]" />
                       </div>
                     )}
                     {post.video_url && (
-                      <div className="border-t border-b border-white/5 bg-black/10 overflow-hidden max-h-[380px] flex items-center justify-center">
-                        <video src={post.video_url} controls className="w-full max-h-[380px]" />
+                      <div className="border-t border-b border-white/5 bg-black/20 overflow-hidden max-h-[550px] w-full flex items-center justify-center">
+                        <video src={post.video_url} controls className="w-full max-h-[550px] object-contain" />
                       </div>
                     )}
-
+ 
                     {/* Statistiques post */}
-                    <div className="px-4 py-2.5 flex justify-between items-center text-[9px] text-slate-500 border-t border-white/5">
+                    <div className="px-4 py-2.5 flex justify-between items-center text-xs text-slate-500 border-t border-white/5">
                       <span>{post.likes_count} J'aime</span>
                       <span>{post.comments ? post.comments.length : 0} Commentaires</span>
                     </div>
-
+ 
                     {/* Actions post */}
                     <div className="px-2 py-1.5 flex gap-1 border-t border-white/5 bg-slate-900/10 shrink-0">
                       <button
                         onClick={() => handleLike(post.id)}
                         className={`post-action-btn ${post.is_liked ? 'liked' : ''}`}
                       >
-                        <Heart size={14} className={post.is_liked ? "fill-blue-500 text-blue-500" : ""} />
+                        <Heart 
+                          size={18} 
+                          className={post.is_liked ? "fill-blue-500 text-blue-500 animate-heartBeat" : "transition-transform hover:scale-110 active:scale-90"} 
+                        />
                         <span>J'aime</span>
                       </button>
                       <button
@@ -1169,7 +1249,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                         }}
                         className="post-action-btn"
                       >
-                        <MessageCircle size={14} />
+                        <MessageCircle size={18} />
                         <span>Commenter</span>
                       </button>
                     </div>
@@ -1183,21 +1263,21 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                             placeholder="Écrire un commentaire..."
                             value={commentText}
                             onChange={(e) => setCommentText(e.target.value)}
-                            className="flex-1 input-pill bg-[#090b11] border-white/5 text-xs py-2 px-3 focus:bg-[#121620]"
+                            className="flex-1 input-pill bg-[#090b11] border-white/5 text-sm py-2.5 px-3.5 focus:bg-[#121620]"
                             required
                           />
                           <button
                             type="submit"
                             className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shrink-0"
                           >
-                            <Send size={12} />
+                            <Send size={15} />
                           </button>
                         </form>
 
                         <div className="flex flex-col gap-2.5 max-h-48 overflow-y-auto pr-1 scrollbar-none">
                           {post.comments && post.comments.map((comment) => (
-                            <div key={comment.id} className="flex gap-2.5 items-start text-[10px]">
-                              <div className="w-7 h-7 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-[9px] shrink-0 border border-slate-700 overflow-hidden">
+                            <div key={comment.id} className="flex gap-2.5 items-start text-xs">
+                              <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs shrink-0 border border-slate-700 overflow-hidden">
                                 {comment.author_avatar_url ? (
                                   <img src={comment.author_avatar_url} alt="" className="w-full h-full object-cover" />
                                 ) : (
@@ -1218,10 +1298,10 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
               )}
 
               {posts.length === 0 && !loading && (
-                <div className="card text-center py-16 text-slate-500 text-xs flex flex-col items-center gap-1.5 bg-slate-900/20">
+                <div className="card text-center py-16 text-slate-500 text-sm flex flex-col items-center gap-1.5 bg-slate-900/20">
                   <Shield size={24} className="text-blue-500/30" />
                   <p className="font-semibold">Aucune publication sur le fil.</p>
-                  <p className="text-[10px]">Publiez votre premier post dès maintenant !</p>
+                  <p className="text-xs">Publiez votre premier post dès maintenant !</p>
                 </div>
               )}
             </div>
@@ -1235,13 +1315,13 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
 
         {/* VIEW : AMIS (PLEIN ECRAN PAGE) */}
         {activeView === "friends" && (
-          <div className="w-full max-w-xl mx-auto page-content flex flex-col gap-5">
+          <div className="w-full max-w-3xl mx-auto page-content flex flex-col gap-5">
             
             {/* Header Amis */}
             <div className="flex justify-between items-center bg-[#121620] border border-white/5 rounded-2xl p-4 shadow-sm shrink-0">
               <div className="flex items-center gap-2">
-                <Users className="text-blue-500" size={20} />
-                <h2 className="font-display font-extrabold text-base text-white">Gestion d'Amis</h2>
+                <Users className="text-blue-500" size={24} />
+                <h2 className="font-display font-extrabold text-lg text-white">Gestion d'Amis</h2>
               </div>
             </div>
 
@@ -1250,7 +1330,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
               <div className="flex border-b border-white/5 bg-slate-950/20 shrink-0">
                 <button
                   onClick={() => setActiveFriendTab("my-friends")}
-                  className={`flex-1 py-3 text-xs font-bold transition-all border-b-2 ${
+                  className={`flex-1 py-3.5 text-sm font-bold transition-all border-b-2 ${
                     activeFriendTab === "my-friends"
                       ? "border-blue-600 text-blue-600 bg-white/5"
                       : "border-transparent text-slate-400 hover:text-white"
@@ -1260,7 +1340,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                 </button>
                 <button
                   onClick={() => setActiveFriendTab("find-friends")}
-                  className={`flex-1 py-3 text-xs font-bold transition-all border-b-2 ${
+                  className={`flex-1 py-3.5 text-sm font-bold transition-all border-b-2 ${
                     activeFriendTab === "find-friends"
                       ? "border-blue-600 text-blue-600 bg-white/5"
                       : "border-transparent text-slate-400 hover:text-white"
@@ -1273,8 +1353,8 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
               <div className="p-4 overflow-y-auto flex flex-col gap-3 max-h-[500px] scrollbar-none">
                 {loadingFriends ? (
                   <div className="flex flex-col items-center justify-center py-12 text-slate-400 gap-2">
-                    <Loader2 className="animate-spin text-blue-500" size={24} />
-                    <span className="text-[10px] font-semibold">Récupération des utilisateurs...</span>
+                    <Loader2 className="animate-spin text-blue-500" size={28} />
+                    <span className="text-xs font-semibold">Récupération des utilisateurs...</span>
                   </div>
                 ) : (
                   <>
@@ -1285,7 +1365,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                           .map((f) => (
                             <div key={f.id} className="flex justify-between items-center p-2 rounded-xl hover:bg-white/5 transition-colors">
                               <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden border border-white/5">
+                                <div className="w-11 h-11 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm overflow-hidden border border-white/5">
                                   {f.avatar_url ? (
                                     <img src={f.avatar_url} alt="" className="w-full h-full object-cover" />
                                   ) : (
@@ -1293,29 +1373,29 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                                   )}
                                 </div>
                                 <div>
-                                  <p className="text-xs font-bold text-slate-200 leading-snug">{f.display_name || f.username}</p>
-                                  <p className="text-[9px] text-slate-500 leading-none">@{f.username}</p>
+                                  <p className="text-sm font-bold text-slate-200 leading-snug">{f.display_name || f.username}</p>
+                                  <p className="text-xs text-slate-500 leading-none">@{f.username}</p>
                                 </div>
                               </div>
                               <div className="flex gap-2">
                                 <button
                                   onClick={() => handleOpenChat(f.id)}
-                                  className="px-3.5 py-2 rounded-xl bg-blue-600/10 hover:bg-blue-600/20 text-blue-500 font-bold text-[10px] transition-colors"
+                                  className="px-4 py-2.5 rounded-xl bg-blue-600/10 hover:bg-blue-600/20 text-blue-500 font-bold text-xs transition-colors"
                                 >
                                   Message
                                 </button>
                                 <button
                                   onClick={() => handleDeclineFriendRequest(f.id)}
                                   disabled={actioningFriendId === f.id}
-                                  className="px-3.5 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold text-[10px] transition-colors disabled:opacity-50 min-w-[65px] flex items-center justify-center"
+                                  className="px-4 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold text-xs transition-colors disabled:opacity-50 min-w-[75px] flex items-center justify-center"
                                 >
-                                  {actioningFriendId === f.id ? <Loader2 size={10} className="animate-spin" /> : "Retirer"}
+                                  {actioningFriendId === f.id ? <Loader2 size={12} className="animate-spin" /> : "Retirer"}
                                 </button>
                               </div>
                             </div>
                           ))
                       ) : (
-                        <div className="text-center py-12 text-slate-500 text-xs">
+                        <div className="text-center py-12 text-slate-500 text-sm">
                           Vous n'avez pas encore d'amis acceptés.
                         </div>
                       )
@@ -1326,7 +1406,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                           .map((f) => (
                             <div key={f.id} className="flex justify-between items-center p-2 rounded-xl hover:bg-white/5 transition-colors">
                               <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-xs overflow-hidden border border-white/5">
+                                <div className="w-11 h-11 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center font-bold text-sm overflow-hidden border border-white/5">
                                   {f.avatar_url ? (
                                     <img src={f.avatar_url} alt="" className="w-full h-full object-cover" />
                                   ) : (
@@ -1334,8 +1414,8 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                                   )}
                                 </div>
                                 <div>
-                                  <p className="text-xs font-bold text-slate-200 leading-snug">{f.display_name || f.username}</p>
-                                  <p className="text-[9px] text-slate-500 leading-none">@{f.username}</p>
+                                  <p className="text-sm font-bold text-slate-200 leading-snug">{f.display_name || f.username}</p>
+                                  <p className="text-xs text-slate-500 leading-none">@{f.username}</p>
                                 </div>
                               </div>
 
@@ -1345,39 +1425,39 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                                   <button
                                     onClick={() => handleAcceptFriendRequest(f.id)}
                                     disabled={actioningFriendId === f.id}
-                                    className="px-3 py-1.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] transition-colors min-w-[60px]"
+                                    className="px-3.5 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold text-xs transition-colors min-w-[70px]"
                                   >
-                                    {actioningFriendId === f.id ? <Loader2 size={10} className="animate-spin" /> : "Accepter"}
+                                    {actioningFriendId === f.id ? <Loader2 size={12} className="animate-spin" /> : "Accepter"}
                                   </button>
                                   <button
                                     onClick={() => handleDeclineFriendRequest(f.id)}
                                     disabled={actioningFriendId === f.id}
-                                    className="px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold text-[10px] transition-colors"
+                                    className="px-3.5 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 font-bold text-xs transition-colors"
                                   >
-                                    {actioningFriendId === f.id ? <Loader2 size={10} className="animate-spin" /> : "Refuser"}
+                                    {actioningFriendId === f.id ? <Loader2 size={12} className="animate-spin" /> : "Refuser"}
                                   </button>
                                 </div>
                               ) : f.is_outgoing_pending ? (
                                 <button
                                   onClick={() => handleDeclineFriendRequest(f.id)}
                                   disabled={actioningFriendId === f.id}
-                                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-red-500/10 text-slate-400 hover:text-red-500 font-bold text-[10px] transition-colors"
+                                  className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-red-500/10 text-slate-400 hover:text-red-500 font-bold text-xs transition-colors"
                                 >
-                                  {actioningFriendId === f.id ? <Loader2 size={10} className="animate-spin" /> : "Annuler"}
+                                  {actioningFriendId === f.id ? <Loader2 size={12} className="animate-spin" /> : "Annuler"}
                                 </button>
                               ) : (
                                 <button
                                   onClick={() => handleSendFriendRequest(f.id)}
                                   disabled={actioningFriendId === f.id}
-                                  className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] transition-colors min-w-[70px] flex items-center justify-center"
+                                  className="px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-colors min-w-[80px] flex items-center justify-center"
                                 >
-                                  {actioningFriendId === f.id ? <Loader2 size={10} className="animate-spin" /> : "Inviter"}
+                                  {actioningFriendId === f.id ? <Loader2 size={12} className="animate-spin" /> : "Inviter"}
                                 </button>
                               )}
                             </div>
                           ))
                       ) : (
-                        <div className="text-center py-12 text-slate-500 text-xs">
+                        <div className="text-center py-12 text-slate-500 text-sm">
                           Aucun autre utilisateur trouvé.
                         </div>
                       )
@@ -1392,18 +1472,18 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
 
         {/* VIEW : MESSENGER (PLEIN ECRAN PAGE) */}
         {activeView === "messenger" && (
-          <div className="w-full max-w-xl mx-auto page-content flex flex-col gap-4">
+          <div className="w-full max-w-4xl mx-auto page-content flex flex-col gap-4">
             
             {!selectedConversation ? (
               <>
                 <div className="flex justify-between items-center bg-[#121620] border border-white/5 rounded-2xl p-4 shadow-sm shrink-0">
                   <div className="flex items-center gap-2">
-                    <MessageCircle className="text-blue-500" size={20} />
-                    <h2 className="font-display font-extrabold text-base text-white">Messagerie</h2>
+                    <MessageCircle className="text-blue-500" size={24} />
+                    <h2 className="font-display font-extrabold text-lg text-white">Messagerie</h2>
                   </div>
                 </div>
 
-                <div className="card bg-[#121620] border border-white/5 rounded-2xl p-3.5 flex flex-col gap-1.5 min-h-[400px] overflow-y-auto scrollbar-none">
+                <div className="card bg-[#121620] border border-white/5 rounded-2xl p-3.5 flex flex-col gap-1.5 min-h-[400px] md:h-[calc(100vh-12rem)] md:min-h-[500px] overflow-y-auto scrollbar-none">
                   {conversations.length > 0 ? (
                     conversations.map((c) => (
                       <div 
@@ -1415,7 +1495,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                         className="flex items-center justify-between p-3.5 rounded-2xl hover:bg-white/5 cursor-pointer transition-colors"
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm border border-white/10 shadow-sm overflow-hidden shrink-0">
+                          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm border border-white/10 shadow-sm overflow-hidden shrink-0">
                             {c.recipient_avatar_url ? (
                               <img src={c.recipient_avatar_url} alt="" className="w-full h-full object-cover" />
                             ) : (
@@ -1423,10 +1503,10 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                             )}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-200 truncate">
+                            <p className="text-sm font-bold text-slate-200 truncate">
                               {c.recipient_display_name || c.recipient_username}
                             </p>
-                            <p className="text-[10px] text-slate-500 mt-0.5 truncate max-w-[240px]">
+                            <p className="text-xs text-slate-500 mt-0.5 truncate max-w-[240px]">
                               {c.last_message_content ? (
                                 <>
                                   {c.last_message_sender_id === currentUser.id ? "Vous : " : ""}
@@ -1439,14 +1519,14 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                           </div>
                         </div>
                         {c.last_message_time && (
-                          <span className="text-[8px] text-slate-500 whitespace-nowrap self-start mt-1 shrink-0">
+                          <span className="text-[10px] text-slate-500 whitespace-nowrap self-start mt-1 shrink-0">
                             {formatMessageTime(c.last_message_time)}
                           </span>
                         )}
                       </div>
                     ))
                   ) : (
-                    <div className="text-center py-20 text-slate-500 text-xs flex flex-col items-center gap-2 my-auto">
+                    <div className="text-center py-20 text-slate-500 text-sm flex flex-col items-center gap-2 my-auto">
                       <MessageCircle size={32} className="text-slate-700" />
                       <p className="font-semibold">Aucune discussion active.</p>
                       <button 
@@ -1461,7 +1541,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
               </>
             ) : (
               /* Fenêtre de discussion active */
-              <div className="card bg-[#121620] border-white/5 rounded-3xl p-0 flex flex-col h-[520px] overflow-hidden animate-scaleIn">
+              <div className="card bg-[#121620] border-white/5 rounded-3xl p-0 flex flex-col h-[520px] md:h-[calc(100vh-10rem)] md:min-h-[580px] overflow-hidden animate-scaleIn">
                 {/* Chat Header */}
                 <div className="p-4 border-b border-white/5 flex justify-between items-center bg-slate-950/20 shrink-0">
                   <div className="flex items-center gap-3 min-w-0">
@@ -1469,9 +1549,9 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                       onClick={() => setSelectedConversation(null)} 
                       className="p-1.5 rounded-full hover:bg-white/5 text-slate-400 mr-0.5"
                     >
-                      <ChevronLeft size={18} />
+                      <ChevronLeft size={20} />
                     </button>
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs border border-white/10 shadow-sm shrink-0 overflow-hidden">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm border border-white/10 shadow-sm shrink-0 overflow-hidden">
                       {selectedConversation.recipient_avatar_url ? (
                         <img src={selectedConversation.recipient_avatar_url} alt="" className="w-full h-full object-cover" />
                       ) : (
@@ -1479,10 +1559,10 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                       )}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-xs font-bold text-slate-200 truncate leading-snug">
+                      <h4 className="text-sm font-bold text-slate-200 truncate leading-snug">
                         {selectedConversation.recipient_display_name || selectedConversation.recipient_username}
                       </h4>
-                      <p className="text-[9px] text-slate-500 leading-none">@{selectedConversation.recipient_username}</p>
+                      <p className="text-xs text-slate-500 leading-none">@{selectedConversation.recipient_username}</p>
                     </div>
                   </div>
 
@@ -1493,14 +1573,14 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                       className="p-2.5 rounded-xl bg-white/5 hover:bg-blue-600/10 text-slate-300 hover:text-blue-500 transition-colors"
                       title="Appel Audio"
                     >
-                      <Phone size={14} />
+                      <Phone size={18} />
                     </button>
                     <button
                       onClick={() => handleStartCall("video")}
                       className="p-2.5 rounded-xl bg-white/5 hover:bg-blue-600/10 text-slate-300 hover:text-blue-500 transition-colors"
                       title="Appel Vidéo"
                     >
-                      <Video size={14} />
+                      <Video size={18} />
                     </button>
                   </div>
                 </div>
@@ -1516,7 +1596,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                         key={m.id} 
                         className={`flex flex-col max-w-[80%] ${isMe ? 'self-end items-end' : 'self-start items-start'}`}
                       >
-                        <div className={`p-3 rounded-2xl text-xs leading-relaxed break-words shadow-sm flex items-center gap-3 ${
+                        <div className={`p-3 rounded-2xl text-sm leading-relaxed break-words shadow-sm flex items-center gap-3 ${
                           isCall 
                             ? 'bg-slate-900 border border-white/5 text-slate-300 min-w-[200px]' 
                             : isMe 
@@ -1555,14 +1635,14 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                             </div>
                           )}
                         </div>
-                        <span className="text-[8px] text-slate-500 mt-1.5 px-1 font-medium">
+                        <span className="text-[10px] text-slate-500 mt-1.5 px-1 font-medium">
                           {formatMessageTime(m.created_at)}
                         </span>
                       </div>
                     );
                   })}
                   {chatMessages.length === 0 && (
-                    <div className="flex-1 flex items-center justify-center text-slate-500 text-xs italic my-auto">
+                    <div className="flex-1 flex items-center justify-center text-slate-500 text-sm italic my-auto">
                       Début de la discussion. Dites bonjour !
                     </div>
                   )}
@@ -1596,7 +1676,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                       className="p-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-white/5 transition-colors shrink-0"
                       title="Photo/Vidéo"
                     >
-                      <Image size={16} />
+                      <Image size={18} />
                     </button>
                     <input
                       type="file"
@@ -1610,7 +1690,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                       value={chatMessageText}
                       onChange={(e) => setChatMessageText(e.target.value)}
                       placeholder="Votre message..."
-                      className="flex-1 input-pill py-2.5 px-4 text-xs bg-[#090b11] border-white/5"
+                      className="flex-1 input-pill py-2.5 px-4 text-sm bg-[#090b11] border-white/5"
                       disabled={sendingChatMessage}
                       required={!chatMediaFile}
                     />
@@ -1620,9 +1700,9 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                       className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 transition-all shrink-0"
                     >
                       {sendingChatMessage ? (
-                        <Loader2 size={13} className="animate-spin" />
+                        <Loader2 size={15} className="animate-spin" />
                       ) : (
-                        <Send size={13} />
+                        <Send size={15} />
                       )}
                     </button>
                   </form>
@@ -1642,6 +1722,55 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             onLike={handleLike}
             onAddComment={handlePostComment}
           />
+        )}
+
+        </div>
+
+        {/* BARRE LATERALE DROITE (Desktop seulement) */}
+        {(activeView === "feed" || activeView === "profile") && (
+          <aside className="hidden lg:flex flex-col gap-6 w-80 shrink-0 py-6 border-l border-white/5 pl-6 h-full overflow-y-auto mt-2">
+            {/* Notifications */}
+            <div className="flex flex-col gap-3.5">
+              <h3 className="font-display font-extrabold text-[11px] text-slate-400 uppercase tracking-wider">Notifications Récentes</h3>
+              <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto scrollbar-none pr-1">
+                {notifications.slice(0, 4).map((n) => (
+                  <div key={n.id} className="p-3 rounded-2xl bg-[#121620]/60 border border-white/5 text-xs flex flex-col gap-1 hover:bg-white/5 transition-colors">
+                    <p className="text-slate-300 leading-normal">{n.content}</p>
+                    <span className="text-[10px] text-slate-500">{new Date(n.created_at).toLocaleDateString()}</span>
+                  </div>
+                ))}
+                {notifications.length === 0 && (
+                  <p className="text-xs text-slate-500 italic">Aucune notification.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Discussions rapides */}
+            <div className="flex flex-col gap-3.5">
+              <h3 className="font-display font-extrabold text-[11px] text-slate-400 uppercase tracking-wider">Messagerie Rapide</h3>
+              <div className="flex flex-col gap-2">
+                {conversations.slice(0, 4).map((c) => (
+                  <div 
+                    key={c.id}
+                    onClick={() => handleOpenChat(c.recipient_id)}
+                    className="flex items-center gap-3 p-2.5 rounded-2xl bg-[#121620]/40 hover:bg-[#121620] border border-transparent hover:border-white/5 cursor-pointer transition-all"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center font-bold text-xs overflow-hidden shrink-0 border border-white/5 shadow-sm">
+                      {c.recipient_avatar_url ? (
+                        <img src={c.recipient_avatar_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        c.recipient_display_name?.[0]?.toUpperCase() || c.recipient_username?.[0]?.toUpperCase() || "U"
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-200 truncate">{c.recipient_display_name || c.recipient_username}</p>
+                      <p className="text-[10px] text-slate-500 truncate">{c.last_message_content || "Commencer la discussion"}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </aside>
         )}
 
       </main>

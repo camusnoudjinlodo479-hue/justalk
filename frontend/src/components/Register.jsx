@@ -172,30 +172,30 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
   };
 
   return (
-    <div className="w-full max-w-md p-8 card-lg bg-white/80 backdrop-blur-lg border border-white/20 shadow-2xl relative overflow-hidden z-10">
+    <div className="w-full max-w-[480px] sm:max-w-lg p-8 sm:p-10 card-lg bg-white/80 backdrop-blur-lg border border-white/20 shadow-2xl relative overflow-hidden z-10">
       <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
       
-      <div className="flex flex-col items-center text-center gap-5">
-        <div className="w-16 h-16 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 animate-pulseRing relative mb-2">
-          <ScanFace size={32} />
+      <div className="flex flex-col items-center text-center gap-6">
+        <div className="w-20 h-20 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 animate-pulseRing relative mb-2">
+          <ScanFace size={40} />
         </div>
 
         <div>
-          <h2 className="font-display text-2xl font-bold text-slate-800">Créer un compte</h2>
-          <p className="text-slate-500 mt-1.5 text-sm max-w-xs mx-auto">
+          <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-slate-800">Créer un compte</h2>
+          <p className="text-slate-500 mt-2 text-sm sm:text-base max-w-sm mx-auto">
             Utilisez la biométrie (Face ID, Touch ID, Windows Hello) de votre appareil. Zéro mot de passe requis.
           </p>
         </div>
 
         <form onSubmit={handleRegister} className="w-full flex flex-col gap-4 mt-2">
           <div className="relative">
-            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input
               type="text"
               placeholder="Pseudo (ex: antoine)"
               value={username}
               onChange={(e) => setUsername(e.target.value.replace(/\s/g, ""))}
-              className="input-pill pl-12 pr-12"
+              className="input-pill pl-12 pr-12 py-3.5 sm:py-4 text-sm sm:text-base bg-slate-100 text-slate-900 border-slate-200"
               required
               disabled={loading || success}
             />
@@ -210,18 +210,18 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
               disabled={loading || success}
               title="Dicter le pseudo"
             >
-              <Mic size={15} />
+              <Mic size={18} />
             </button>
           </div>
 
           <div className="relative">
-            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
             <input
               type="text"
               placeholder="Nom complet (ex: Antoine L.)"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="input-pill pl-12 pr-12"
+              className="input-pill pl-12 pr-12 py-3.5 sm:py-4 text-sm sm:text-base bg-slate-100 text-slate-900 border-slate-200"
               disabled={loading || success}
             />
             <button
@@ -235,27 +235,27 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
               disabled={loading || success}
               title="Dicter le nom complet"
             >
-              <Mic size={15} />
+              <Mic size={18} />
             </button>
           </div>
 
           {error && (
             error.includes("Ajoutez une empreinte dans Paramètres") ? (
-              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 text-xs font-semibold flex items-center gap-2 text-left">
-                <AlertCircle size={15} className="shrink-0 text-amber-500" />
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold flex items-center gap-2.5 text-left animate-scaleIn">
+                <AlertCircle size={18} className="shrink-0 text-amber-500" />
                 <span>{error}</span>
               </div>
             ) : (
-              <div className="p-3.5 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-xs font-semibold flex items-center gap-2 text-left">
-                <AlertCircle size={15} className="shrink-0" />
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold flex items-center gap-2.5 text-left animate-scaleIn">
+                <AlertCircle size={18} className="shrink-0" />
                 <span>{error}</span>
               </div>
             )
           )}
 
           {success && (
-            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 text-xs font-semibold flex items-center gap-2 text-left">
-              <ShieldCheck size={15} className="shrink-0 animate-bounce" />
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 text-sm font-semibold flex items-center gap-2.5 text-left animate-scaleIn">
+              <ShieldCheck size={18} className="shrink-0 animate-bounce" />
               <span>Compte créé avec succès ! Redirection en cours...</span>
             </div>
           )}
@@ -263,19 +263,19 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
           <button
             type="submit"
             disabled={loading || success}
-            className="btn-primary w-full flex items-center justify-center gap-2 py-3.5"
+            className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-sm sm:text-base font-bold cursor-pointer"
           >
             {loading ? "Vérification de l'appareil..." : success ? "Enregistré !" : "Lancer le scan biométrique"}
-            {!loading && !success && <ArrowRight size={16} />}
+            {!loading && !success && <ArrowRight size={20} />}
           </button>
         </form>
 
         <div className="w-full border-t border-slate-100 pt-5 text-center mt-2">
-          <p className="text-xs text-slate-400 font-medium">
+          <p className="text-sm text-slate-500 font-medium">
             Déjà inscrit ?{" "}
             <button
               onClick={onGoToLogin}
-              className="text-blue-600 font-bold hover:underline"
+              className="text-blue-600 font-bold hover:underline cursor-pointer"
               disabled={loading || success}
             >
               Se connecter ici

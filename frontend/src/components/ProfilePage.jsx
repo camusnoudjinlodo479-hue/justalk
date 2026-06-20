@@ -86,7 +86,7 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
   };
 
   return (
-    <div className="w-full flex flex-col gap-6 max-w-2xl mx-auto page-content">
+    <div className="w-full flex flex-col gap-6 max-w-3xl mx-auto page-content">
       
       {/* 1. SECTION COUVERTURE & AVATAR */}
       <div className="card p-0 overflow-hidden relative shadow-lg bg-slate-900/60 border border-white/5 rounded-3xl">
@@ -100,18 +100,18 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
             </div>
           )}
           {updatingCover && (
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white text-xs font-semibold gap-2 z-10">
-              <Loader2 className="animate-spin text-blue-500" size={16} />
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-sm font-semibold gap-2 z-10">
+              <Loader2 className="animate-spin text-blue-500" size={20} />
               <span>Mise à jour...</span>
             </div>
           )}
           {/* Bouton modifier la couverture */}
           <button
             onClick={() => coverInputRef.current?.click()}
-            className="absolute bottom-3 right-3 p-2 rounded-xl bg-slate-950/70 hover:bg-slate-900 border border-white/10 text-white flex items-center gap-1.5 transition-all text-[10px] font-bold shadow-md cursor-pointer z-10"
+            className="absolute bottom-4 right-4 p-3 rounded-xl bg-slate-950/70 hover:bg-slate-900 border border-white/10 text-white flex items-center gap-2 transition-all text-xs sm:text-sm font-bold shadow-md cursor-pointer z-10"
             disabled={updatingCover}
           >
-            <Camera size={12} />
+            <Camera size={16} />
             <span>Modifier la couverture</span>
           </button>
           <input
@@ -124,21 +124,21 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
         </div>
 
         {/* Info Profil avec Avatar Superposé */}
-        <div className="px-6 pb-6 pt-16 relative flex flex-col sm:flex-row items-center sm:items-end justify-between gap-4">
+        <div className="px-6 pb-6 pt-20 relative flex flex-col sm:flex-row items-center sm:items-end justify-between gap-4">
           
           {/* Avatar positionné à cheval */}
-          <div className="absolute -top-12 left-1/2 sm:left-8 -translate-x-1/2 sm:translate-x-0 w-24 h-24 rounded-full border-4 border-slate-900 bg-slate-800 shadow-xl overflow-hidden group">
+          <div className="absolute -top-14 sm:-top-16 left-1/2 sm:left-8 -translate-x-1/2 sm:translate-x-0 w-28 h-28 sm:w-32 sm:h-32 rounded-full border-4 border-slate-900 bg-slate-800 shadow-xl overflow-hidden group">
             {currentUser.avatar_url ? (
               <img src={currentUser.avatar_url} alt="Profil" className="w-full h-full object-cover" />
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-white font-black text-3xl bg-gradient-to-tr from-blue-600 to-indigo-600">
+              <div className="w-full h-full flex items-center justify-center text-white font-black text-4xl bg-gradient-to-tr from-blue-600 to-indigo-600">
                 {currentUser.display_name?.[0]?.toUpperCase() || currentUser.username?.[0]?.toUpperCase() || "U"}
               </div>
             )}
             
             {updatingAvatar && (
               <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white">
-                <Loader2 className="animate-spin text-blue-500" size={16} />
+                <Loader2 className="animate-spin text-blue-500" size={24} />
               </div>
             )}
             
@@ -147,7 +147,7 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
               onClick={() => avatarInputRef.current?.click()}
               className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white cursor-pointer transition-all"
             >
-              <Camera size={18} />
+              <Camera size={24} />
             </div>
             <input
               type="file"
@@ -159,72 +159,83 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
           </div>
 
           {/* Noms de l'utilisateur */}
-          <div className="text-center sm:text-left sm:pl-28">
-            <h2 className="font-display font-extrabold text-lg text-white leading-tight">
+          <div className="text-center sm:text-left sm:pl-36">
+            <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-white leading-tight">
               {currentUser.display_name || currentUser.username}
             </h2>
-            <p className="text-xs text-slate-400">@{currentUser.username}</p>
+            <p className="text-sm sm:text-base text-slate-400">@{currentUser.username}</p>
           </div>
         </div>
       </div>
 
       {/* 2. MES PUBLICATIONS */}
       <div className="flex flex-col gap-4">
-        <h3 className="font-display font-extrabold text-sm text-slate-200 pl-1">Mes publications</h3>
+        <h3 className="font-display font-extrabold text-lg sm:text-xl text-slate-200 pl-1">Mes publications</h3>
 
         <div className="flex flex-col gap-3.5">
-          {userPosts.map((post) => (
-            <div key={post.id} className="post-card card p-0">
+          {userPosts.map((post, index) => (
+            <div 
+              key={post.id} 
+              className="post-card card p-0 animate-post"
+              style={{ animationDelay: `${Math.min(index, 8) * 80}ms` }}
+            >
               
               {/* En-tête du post */}
               <div className="p-4 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-base shadow-sm overflow-hidden border border-white/5">
                     {post.author_avatar_url ? (
-                      <img src={post.author_avatar_url} alt="" className="w-full h-full object-cover rounded-full" />
+                      <img src={post.author_avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (
                       post.author_display_name?.[0]?.toUpperCase() || post.author_username?.[0]?.toUpperCase() || "U"
                     )}
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-200 leading-snug">{post.author_display_name || post.author_username}</h4>
-                    <span className="text-[8px] text-slate-500 leading-none">
+                    <h4 className="text-base font-bold text-slate-200 leading-snug">{post.author_display_name || post.author_username}</h4>
+                    <span className="text-xs sm:text-sm text-slate-500 leading-none">
                       {new Date(post.created_at).toLocaleDateString("fr-FR", { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                 </div>
               </div>
-
+ 
               {/* Contenu du post */}
               {post.content && (
-                <p className="px-4 pb-3 text-xs leading-relaxed text-slate-300 white-space-pre-wrap">{post.content}</p>
+                <p className={`px-4 pb-3 leading-relaxed text-slate-100 whitespace-pre-wrap ${
+                  post.content.length < 100 && !post.image_url && !post.video_url
+                    ? "text-base sm:text-lg font-bold"
+                    : "text-sm sm:text-base"
+                }`}>{post.content}</p>
               )}
-
+ 
               {/* Média du post */}
               {post.image_url && (
-                <div className="border-t border-b border-white/5 bg-black/10 overflow-hidden max-h-[380px] flex items-center justify-center">
-                  <img src={post.image_url} alt="Publication" className="w-full object-contain max-h-[380px]" />
+                <div className="border-t border-b border-white/5 bg-black/20 overflow-hidden max-h-[550px] w-full flex items-center justify-center cursor-pointer transition-all hover:brightness-95">
+                  <img src={post.image_url} alt="Publication" className="w-full h-full object-cover max-h-[550px]" />
                 </div>
               )}
               {post.video_url && (
-                <div className="border-t border-b border-white/5 bg-black/10 overflow-hidden max-h-[380px] flex items-center justify-center">
-                  <video src={post.video_url} controls className="w-full max-h-[380px]" />
+                <div className="border-t border-b border-white/5 bg-black/20 overflow-hidden max-h-[550px] w-full flex items-center justify-center">
+                  <video src={post.video_url} controls className="w-full max-h-[550px] object-contain" />
                 </div>
               )}
-
+ 
               {/* Statistiques rapides */}
-              <div className="px-4 py-2.5 flex justify-between items-center text-[9px] text-slate-500 border-t border-white/5">
+              <div className="px-4 py-3 flex justify-between items-center text-xs sm:text-sm text-slate-500 border-t border-white/5">
                 <span>{post.likes_count} J'aime</span>
                 <span>{post.comments ? post.comments.length : 0} Commentaires</span>
               </div>
-
+ 
               {/* Boutons d'actions */}
               <div className="px-2 py-1.5 flex gap-1 border-t border-white/5 bg-slate-900/10 shrink-0">
                 <button
                   onClick={() => onLike(post.id)}
                   className={`post-action-btn ${post.is_liked ? 'liked' : ''}`}
                 >
-                  <Heart size={14} className={post.is_liked ? "fill-blue-500 text-blue-500" : ""} />
+                  <Heart 
+                    size={22} 
+                    className={post.is_liked ? "fill-blue-500 text-blue-500 animate-heartBeat" : "transition-transform hover:scale-110 active:scale-90"} 
+                  />
                   <span>J'aime</span>
                 </button>
                 <button
@@ -233,7 +244,7 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
                   }}
                   className="post-action-btn"
                 >
-                  <MessageCircle size={14} />
+                  <MessageCircle size={22} />
                   <span>Commenter</span>
                 </button>
               </div>
@@ -248,31 +259,31 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
                       placeholder="Écrire un commentaire..."
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
-                      className="flex-1 input-pill bg-slate-900 text-xs py-2 px-3 border border-slate-800"
+                      className="flex-1 input-pill bg-slate-900 text-sm sm:text-base py-3 px-4 border border-slate-800"
                       required
                     />
                     <button
                       type="submit"
-                      className="p-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                      className="p-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shrink-0"
                     >
-                      <Send size={12} />
+                      <Send size={18} />
                     </button>
                   </form>
 
                   {/* Liste commentaires */}
                   <div className="flex flex-col gap-2.5 max-h-48 overflow-y-auto pr-1 scrollbar-none">
                     {post.comments && post.comments.map((comment) => (
-                      <div key={comment.id} className="flex gap-2 items-start text-[10px]">
-                        <div className="w-6.5 h-6.5 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-[9px] shrink-0 border border-slate-700">
+                      <div key={comment.id} className="flex gap-2.5 items-start text-xs sm:text-sm">
+                        <div className="w-9 h-9 rounded-full bg-slate-800 text-white flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 border border-slate-700 overflow-hidden">
                           {comment.author_avatar_url ? (
-                            <img src={comment.author_avatar_url} alt="" className="w-full h-full object-cover rounded-full" />
+                            <img src={comment.author_avatar_url} alt="" className="w-full h-full object-cover" />
                           ) : (
                             comment.author_display_name?.[0]?.toUpperCase() || comment.author_username?.[0]?.toUpperCase() || "U"
                           )}
                         </div>
-                        <div className="flex-1 bg-slate-900 rounded-xl p-2 border border-slate-800/80">
+                        <div className="flex-1 bg-slate-900 rounded-xl p-3 border border-slate-800/80">
                           <p className="font-bold text-slate-300">{comment.author_display_name || comment.author_username}</p>
-                          <p className="text-slate-400 mt-0.5 leading-relaxed">{comment.content}</p>
+                          <p className="text-slate-400 mt-1 leading-relaxed">{comment.content}</p>
                         </div>
                       </div>
                     ))}
@@ -283,8 +294,8 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
           ))}
 
           {userPosts.length === 0 && (
-            <div className="card text-center p-8 text-slate-500 text-xs flex flex-col items-center gap-1.5 bg-slate-900/20">
-              <ShieldAlert size={20} className="text-slate-700" />
+            <div className="card text-center p-8 text-slate-500 text-sm flex flex-col items-center gap-1.5 bg-slate-900/20">
+              <ShieldAlert size={24} className="text-slate-700" />
               <p>Aucune publication rédigée pour le moment.</p>
             </div>
           )}
