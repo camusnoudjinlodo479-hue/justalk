@@ -203,15 +203,15 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
               {post.content && (
                 <p className={`px-4 pb-3 leading-relaxed text-slate-100 whitespace-pre-wrap ${
                   post.content.length < 100 && !post.image_url && !post.video_url
-                    ? "text-base sm:text-lg font-bold"
-                    : "text-sm sm:text-base"
+                    ? "text-lg sm:text-xl md:text-2xl font-extrabold text-slate-50"
+                    : "text-base sm:text-lg"
                 }`}>{post.content}</p>
               )}
  
               {/* Média du post */}
               {post.image_url && (
                 <div className="border-t border-b border-white/5 bg-black/20 overflow-hidden max-h-[550px] w-full flex items-center justify-center cursor-pointer transition-all hover:brightness-95">
-                  <img src={post.image_url} alt="Publication" className="w-full h-full object-cover max-h-[550px]" />
+                  <img src={post.image_url} alt="Publication" className="w-full h-auto max-h-[550px] object-contain" />
                 </div>
               )}
               {post.video_url && (
