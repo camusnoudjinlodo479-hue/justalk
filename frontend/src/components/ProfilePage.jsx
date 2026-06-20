@@ -172,18 +172,18 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
       <div className="flex flex-col gap-4">
         <h3 className="font-display font-extrabold text-lg sm:text-xl text-slate-200 pl-1">Mes publications</h3>
 
-        <div className="flex flex-col gap-3.5">
+        <div className="flex flex-col gap-6">
           {userPosts.map((post, index) => (
             <div 
               key={post.id} 
-              className="post-card card p-0 animate-post"
+              className="post-card card p-0 animate-post border-white/10 shadow-lg"
               style={{ animationDelay: `${Math.min(index, 8) * 80}ms` }}
             >
               
               {/* En-tête du post */}
               <div className="p-4 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-base shadow-sm overflow-hidden border border-white/5">
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-extrabold text-base shadow-sm overflow-hidden border border-white/10 shrink-0">
                     {post.author_avatar_url ? (
                       <img src={post.author_avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (
@@ -191,8 +191,8 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
                     )}
                   </div>
                   <div>
-                    <h4 className="text-base font-bold text-slate-200 leading-snug">{post.author_display_name || post.author_username}</h4>
-                    <span className="text-xs sm:text-sm text-slate-500 leading-none">
+                    <h4 className="text-[15px] sm:text-base font-bold text-slate-100 leading-snug">{post.author_display_name || post.author_username}</h4>
+                    <span className="text-[11px] sm:text-xs text-slate-400 leading-none block mt-0.5">
                       {new Date(post.created_at).toLocaleDateString("fr-FR", { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
@@ -203,37 +203,50 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
               {post.content && (
                 <p className={`px-4 pb-3 leading-relaxed text-slate-100 whitespace-pre-wrap ${
                   post.content.length < 100 && !post.image_url && !post.video_url
-                    ? "text-lg sm:text-xl md:text-2xl font-extrabold text-slate-50"
+                    ? "text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-50 leading-snug"
                     : "text-base sm:text-lg"
                 }`}>{post.content}</p>
               )}
  
               {/* Média du post */}
               {post.image_url && (
-                <div className="border-t border-b border-white/5 bg-black/20 overflow-hidden max-h-[550px] w-full flex items-center justify-center cursor-pointer transition-all hover:brightness-95">
-                  <img src={post.image_url} alt="Publication" className="w-full h-auto max-h-[550px] object-contain" />
+                <div className="w-full bg-black/45 overflow-hidden border-t border-b border-white/5 cursor-pointer">
+                  <img 
+                    src={post.image_url} 
+                    alt="Publication" 
+                    className="w-full h-auto min-h-[250px] max-h-[580px] object-cover transition-transform duration-300 hover:scale-[1.01]" 
+                  />
                 </div>
               )}
               {post.video_url && (
-                <div className="border-t border-b border-white/5 bg-black/20 overflow-hidden max-h-[550px] w-full flex items-center justify-center">
-                  <video src={post.video_url} controls className="w-full max-h-[550px] object-contain" />
+                <div className="w-full bg-black/45 overflow-hidden border-t border-b border-white/5">
+                  <video 
+                    src={post.video_url} 
+                    controls 
+                    className="w-full h-auto min-h-[250px] max-h-[580px] object-contain" 
+                  />
                 </div>
               )}
  
               {/* Statistiques rapides */}
-              <div className="px-4 py-3 flex justify-between items-center text-xs sm:text-sm text-slate-500 border-t border-white/5">
-                <span>{post.likes_count} J'aime</span>
-                <span>{post.comments ? post.comments.length : 0} Commentaires</span>
+              <div className="px-4 py-3 flex justify-between items-center text-xs sm:text-sm text-slate-400 border-t border-white/5">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-[10px] text-white select-none">👍</span>
+                  <span className="font-medium text-slate-300">{post.likes_count} J'aime</span>
+                </div>
+                <span className="hover:underline cursor-pointer text-slate-300 font-medium">
+                  {post.comments ? post.comments.length : 0} Commentaires
+                </span>
               </div>
  
               {/* Boutons d'actions */}
               <div className="px-2 py-1.5 flex gap-1 border-t border-white/5 bg-slate-900/10 shrink-0">
                 <button
                   onClick={() => onLike(post.id)}
-                  className={`post-action-btn ${post.is_liked ? 'liked' : ''}`}
+                  className={`post-action-btn ${post.is_liked ? 'liked text-blue-500 font-bold' : ''}`}
                 >
                   <Heart 
-                    size={22} 
+                    size={20} 
                     className={post.is_liked ? "fill-blue-500 text-blue-500 animate-heartBeat" : "transition-transform hover:scale-110 active:scale-90"} 
                   />
                   <span>J'aime</span>
@@ -244,7 +257,7 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
                   }}
                   className="post-action-btn"
                 >
-                  <MessageCircle size={22} />
+                  <MessageCircle size={20} />
                   <span>Commenter</span>
                 </button>
               </div>

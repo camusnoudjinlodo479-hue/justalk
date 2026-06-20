@@ -1,4 +1,4 @@
-const CACHE_NAME = 'justalk-v2';
+const CACHE_NAME = 'justalk-v3';
 const STATIC_ASSETS = ['/', '/index.html'];
 
 self.addEventListener('install', (event) => {
