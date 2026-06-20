@@ -752,7 +752,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
   };
 
   return (
-    <div className="w-screen h-[100dvh] bg-[#090b11] text-white flex flex-col font-sans relative overflow-hidden">
+    <div className="w-screen h-[100dvh] bg-[#090b11] text-[var(--text-primary)] flex flex-col font-sans relative overflow-hidden">
       
       {/* WebRTC Calling Overlay */}
       {activeCall && (
@@ -773,7 +773,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-black text-2xl shadow-md">
               J
             </div>
-            <span className="font-display font-black text-xl tracking-tight text-white hidden sm:inline">
+            <span className="font-display font-black text-xl tracking-tight text-[var(--text-primary)] hidden sm:inline">
               Justalk
             </span>
           </div>
