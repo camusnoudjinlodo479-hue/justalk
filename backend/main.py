@@ -609,6 +609,25 @@ def create_post(req: schemas.PostCreate, db: Session = Depends(database.get_db),
     )
 
 
+@app.delete("/api/posts/{post_id}")
+def delete_post(post_id: uuid.UUID, db: Session = Depends(database.get_db), current_user: models.User = Depends(auth.get_current_user)):
+    """Supprime une publication si l'utilisateur connecté en est l'auteur."""
+    post = db.query(models.Post).filter(models.Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Publication introuvable.")
+    if post.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Seul l'auteur peut supprimer sa publication.")
+    
+    try:
+        db.delete(post)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur lors de la suppression de la publication : {str(e)}")
+        
+    return {"status": "success", "message": "Publication supprimée avec succès."}
+
+
 # --- Endpoint Téléversement Backend (Upload) ---
 
 @app.post("/api/upload")

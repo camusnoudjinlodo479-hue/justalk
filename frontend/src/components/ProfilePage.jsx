@@ -1,8 +1,8 @@
 // frontend/src/components/ProfilePage.jsx
 import { useState, useEffect, useRef } from "react";
-import { Camera, Loader2, Heart, MessageCircle, ShieldAlert, Sparkles, Send } from "lucide-react";
+import { Camera, Loader2, Heart, MessageCircle, ShieldAlert, Sparkles, Send, MoreHorizontal } from "lucide-react";
 
-export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike, onAddComment }) {
+export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike, onAddComment, onDeletePost }) {
   const [userPosts, setUserPosts] = useState([]);
   const [updatingCover, setUpdatingCover] = useState(false);
   const [updatingAvatar, setUpdatingAvatar] = useState(false);
@@ -197,6 +197,15 @@ export default function ProfilePage({ currentUser, setCurrentUser, posts, onLike
                     </span>
                   </div>
                 </div>
+                {post.user_id === currentUser.id && (
+                  <button
+                    onClick={() => onDeletePost?.(post)}
+                    className="p-2 hover:bg-white/5 rounded-full transition-all text-slate-400 hover:text-white shrink-0"
+                    title="Options"
+                  >
+                    <MoreHorizontal size={20} />
+                  </button>
+                )}
               </div>
  
               {/* Contenu du post */}

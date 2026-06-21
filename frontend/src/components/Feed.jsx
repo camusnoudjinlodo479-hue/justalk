@@ -6,7 +6,8 @@ import { createClient } from "@supabase/supabase-js";
 import { 
   Plus, Trash2, Heart, MessageCircle, Image, Send, X, Loader2, LogOut, 
   Users, Bell, Camera, Video, StopCircle, ChevronLeft, Mic, Film, 
-  Phone, Shield, User, Sparkles, PhoneCall, PhoneMissed, PhoneIncoming
+  Phone, Shield, User, Sparkles, PhoneCall, PhoneMissed, PhoneIncoming,
+  MoreHorizontal
 } from "lucide-react";
 import ReelFeed from "./ReelFeed";
 import ProfilePage from "./ProfilePage";
@@ -67,6 +68,10 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
 
   // Calling States
   const [activeCall, setActiveCall] = useState(null); // { roomId, callType, isIncoming, callerName }
+
+  // Post Deletion States
+  const [activeBottomSheetPost, setActiveBottomSheetPost] = useState(null);
+  const [deletingPostId, setDeletingPostId] = useState(null);
 
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -590,6 +595,23 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
       });
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleDeletePost = async (postId) => {
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setPosts((prev) => prev.filter((p) => p.id !== postId));
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.detail || "Erreur lors de la suppression de la publication.");
+      }
+    } catch (err) {
+      console.error("Erreur de suppression du post:", err);
+      alert("Erreur réseau lors de la suppression.");
     }
   };
 
@@ -1191,6 +1213,15 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                           </span>
                         </div>
                       </div>
+                      {post.user_id === currentUser.id && (
+                        <button
+                          onClick={() => setActiveBottomSheetPost(post)}
+                          className="p-2 hover:bg-white/5 rounded-full transition-all text-slate-400 hover:text-white shrink-0"
+                          title="Options"
+                        >
+                          <MoreHorizontal size={20} />
+                        </button>
+                      )}
                     </div>
  
                     {/* Contenu post */}
@@ -1723,6 +1754,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             posts={posts}
             onLike={handleLike}
             onAddComment={handlePostComment}
+            onDeletePost={(post) => setActiveBottomSheetPost(post)}
           />
         )}
 
@@ -1936,6 +1968,82 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
               Expire à {new Date(selectedStory.expires_at).toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit' })}
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* BOTTOM SHEET FOR POST OPTIONS */}
+      {activeBottomSheetPost && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center animate-fadeIn" 
+          onClick={() => setActiveBottomSheetPost(null)}
+        >
+          <div 
+            className="bg-[#121620] w-full max-w-md rounded-t-3xl p-5 pb-8 border-t border-white/10 relative bottom-0 left-1/2 -translate-x-1/2 animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+            style={{ position: 'fixed', bottom: 0, left: '50%' }}
+          >
+            <div className="w-12 h-1.5 bg-slate-700/50 rounded-full mx-auto mb-5" />
+            
+            <h3 className="text-base font-bold text-slate-200 mb-4 px-1">Options de la publication</h3>
+            
+            <div className="flex flex-col gap-2">
+              {activeBottomSheetPost.user_id === currentUser.id && (
+                <button
+                  onClick={() => {
+                    setDeletingPostId(activeBottomSheetPost.id);
+                    setActiveBottomSheetPost(null);
+                  }}
+                  className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-all font-bold text-left"
+                >
+                  <Trash2 size={20} />
+                  <span>Supprimer la publication</span>
+                </button>
+              )}
+              
+              <button
+                onClick={() => setActiveBottomSheetPost(null)}
+                className="w-full flex items-center justify-center p-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-all font-bold mt-2"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE MODAL */}
+      {deletingPostId && (
+        <div 
+          className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 animate-fadeIn" 
+          onClick={() => setDeletingPostId(null)}
+        >
+          <div 
+            className="bg-[#121620] w-full max-w-sm rounded-2xl border border-white/10 p-6 shadow-2xl animate-scaleIn flex flex-col gap-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-white">Supprimer définitivement ?</h3>
+            <p className="text-sm text-slate-400 leading-relaxed">
+              Cette action est irréversible. La publication sera retirée de votre fil d'actualités définitivement.
+            </p>
+            
+            <div className="flex gap-3 mt-2 justify-end">
+              <button
+                onClick={() => setDeletingPostId(null)}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-sm transition-all"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  handleDeletePost(deletingPostId);
+                  setDeletingPostId(null);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm shadow-md transition-all active:scale-95"
+              >
+                Supprimer
+              </button>
+            </div>
           </div>
         </div>
       )}
