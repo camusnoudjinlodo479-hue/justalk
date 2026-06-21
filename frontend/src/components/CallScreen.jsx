@@ -10,11 +10,15 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
   const [isAccepted, setIsAccepted] = useState(!isIncoming);
   const [status, setStatus] = useState(isIncoming ? "Appel entrant..." : "Appel en cours...");
   const [enhancerEnabled, setEnhancerEnabled] = useState(true);
+  const [callState, setCallState] = useState("ringing"); // "ringing" | "connected" | "ended" | "missed"
+  const [duration, setDuration] = useState(0);
   
   const localVideoRef = useRef(null);
   const peersRef = useRef({}); // peerId -> RTCPeerConnection
   const wsRef = useRef(null);
   const localStreamRef = useRef(null);
+  const callStateRef = useRef("ringing");
+  const answerReceivedRef = useRef(false);
 
   // Web Audio Ringing Synthesizer & Missed Call tracking
   const audioCtxRef = useRef(null);
@@ -171,23 +175,19 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
     }
   };
 
+  const formatDuration = (secs) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, "0");
+    const s = (secs % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
   const recordCallOutcome = async () => {
     if (isIncoming || callLoggedRef.current) return;
     callLoggedRef.current = true;
     
     let outcomeContent = "";
-    if (hasConnectedRef.current) {
-      const durationSeconds = connectedTimeRef.current 
-        ? Math.round((Date.now() - connectedTimeRef.current) / 1000) 
-        : 0;
-      let durationText = "";
-      if (durationSeconds < 60) {
-        durationText = `${durationSeconds}s`;
-      } else {
-        const mins = Math.floor(durationSeconds / 60);
-        const secs = durationSeconds % 60;
-        durationText = `${mins}m ${secs < 10 ? '0' : ''}${secs}s`;
-      }
+    if (callStateRef.current === "connected" || duration > 0) {
+      const durationText = formatDuration(duration);
       outcomeContent = `${callType === "video" ? "🎥 Appel vidéo" : "📞 Appel audio"} terminé (${durationText})`;
     } else {
       outcomeContent = `${callType === "video" ? "🎥 Appel vidéo" : "📞 Appel audio"} manqué`;
@@ -206,6 +206,38 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
       console.error("Failed to log call outcome:", err);
     }
   };
+
+  // Sync callStateRef with callState
+  useEffect(() => {
+    callStateRef.current = callState;
+  }, [callState]);
+
+  // 30 seconds timeout to detect missed calls
+  useEffect(() => {
+    const missedCallTimeout = setTimeout(() => {
+      if (callStateRef.current === "ringing") {
+        setCallState("missed");
+        cleanupCall();
+      }
+    }, 30000);
+
+    return () => {
+      clearTimeout(missedCallTimeout);
+    };
+  }, []);
+
+  // Chronometer timer
+  useEffect(() => {
+    let intervalId = null;
+    if (callState === "connected") {
+      intervalId = setInterval(() => {
+        setDuration(prev => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [callState]);
 
   // 1. Démarrer le flux local et la signalisation
   useEffect(() => {
@@ -262,6 +294,18 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
         setStatus("Connecté");
       };
 
+      const checkIfCallConnected = (peerId) => {
+        const pc = peersRef.current[peerId];
+        if (pc && pc.connectionState === "connected" && answerReceivedRef.current) {
+          setCallState("connected");
+          setStatus("Appel en cours");
+          if (!hasConnectedRef.current) {
+            hasConnectedRef.current = true;
+            connectedTimeRef.current = Date.now();
+          }
+        }
+      };
+
       wsRef.current.onmessage = async (event) => {
         const data = JSON.parse(event.data);
         const { type, sender, name, offer, answer, candidate, target } = data;
@@ -299,12 +343,16 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
               target: sender,
               answer: ans
             }));
+            answerReceivedRef.current = true;
+            checkIfCallConnected(sender);
             break;
             
           case "answer":
             const peerPc = peersRef.current[sender];
             if (peerPc) {
               await peerPc.setRemoteDescription(new RTCSessionDescription(answer));
+              answerReceivedRef.current = true;
+              checkIfCallConnected(sender);
             }
             break;
             
@@ -318,6 +366,10 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
           case "peer-left":
           case "leave":
             removePeer(sender);
+            if (Object.keys(peersRef.current).length === 0) {
+              setCallState("ended");
+              cleanupCall();
+            }
             break;
             
           default:
@@ -371,7 +423,10 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
     };
 
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
+      console.log(`Connection state change for ${peerId}: ${pc.connectionState}`);
+      if (pc.connectionState === "connected") {
+        checkIfCallConnected(peerId);
+      } else if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
         removePeer(peerId);
       }
     };
@@ -407,9 +462,13 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
     setRemotePeers(prev => {
       const copy = { ...prev };
       delete copy[peerId];
-      // Si plus personne, on repasse en attente
-      if (Object.keys(copy).length === 0 && !isIncoming) {
-        setStatus("En attente de correspondants...");
+      if (Object.keys(copy).length === 0) {
+        if (callStateRef.current === "connected") {
+          setCallState("ended");
+          cleanupCall();
+        } else if (!isIncoming) {
+          setStatus("En attente de correspondants...");
+        }
       }
       return copy;
     });
@@ -462,8 +521,8 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
   };
 
   const handleHangup = () => {
+    setCallState(callStateRef.current === "connected" ? "ended" : "ended");
     cleanupCall();
-    onClose();
   };
 
   const handleAccept = () => {
@@ -471,9 +530,42 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
   };
 
   const handleDecline = () => {
+    setCallState("missed");
     cleanupCall();
-    onClose();
   };
+
+  if (callState === "ended" || callState === "missed") {
+    return (
+      <div className="call-screen text-white flex flex-col items-center justify-center p-8 bg-slate-950 animate-fadeIn">
+        <div className="flex flex-col items-center gap-6">
+          {callState === "missed" ? (
+            <>
+              <div className="w-24 h-24 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-500 shadow-lg shadow-red-500/10">
+                <PhoneOff size={44} />
+              </div>
+              <h3 className="text-2xl font-bold tracking-tight">Appel manqué</h3>
+              <p className="text-xl font-mono text-slate-400">00:00</p>
+            </>
+          ) : (
+            <>
+              <div className="w-24 h-24 rounded-full bg-slate-500/10 border border-slate-500/20 flex items-center justify-center text-slate-400 shadow-lg shadow-slate-500/10">
+                <Phone size={44} className="rotate-[135deg]" />
+              </div>
+              <h3 className="text-2xl font-bold tracking-tight">Appel terminé</h3>
+              <p className="text-xl font-mono text-slate-400">{formatDuration(duration)}</p>
+            </>
+          )}
+          
+          <button
+            onClick={onClose}
+            className="mt-8 px-8 py-3 rounded-full bg-slate-800 hover:bg-slate-700 text-white font-medium shadow-md transition-all active:scale-95"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`call-screen text-white flex flex-col justify-between ${
@@ -565,8 +657,15 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
               <Lock size={10} className="text-[#128c7e]/60" />
               <span>Chiffré de bout en bout</span>
             </div>
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">{status}</h4>
-            {Object.keys(remotePeers).length === 0 && (
+            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              {callState === "connected" ? "Appel en cours" : status}
+            </h4>
+            {callState === "connected" && (
+              <p className="text-lg font-mono text-white mt-1 font-semibold">
+                {formatDuration(duration)}
+              </p>
+            )}
+            {callState === "ringing" && Object.keys(remotePeers).length === 0 && (
               <p className="text-sm text-slate-300 font-medium">Connexion avec vos correspondants...</p>
             )}
           </div>

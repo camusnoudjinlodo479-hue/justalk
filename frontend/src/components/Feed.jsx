@@ -1012,16 +1012,24 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
 
             {/* COMPOSER DE POST */}
             <div className="card bg-[#121620] border-white/5 p-4 rounded-none sm:rounded-2xl border-x-0 sm:border-x flex flex-col gap-4 relative">
-              <div className="flex gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-extrabold text-base shrink-0 shadow-inner overflow-hidden border border-white/10">
-                  {currentUser.avatar_url ? (
-                    <img src={currentUser.avatar_url} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    currentUser.display_name?.[0]?.toUpperCase() || currentUser.username?.[0]?.toUpperCase() || "U"
-                  )}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-blue-500 to-indigo-600 text-white flex items-center justify-center font-extrabold text-sm sm:text-base shrink-0 shadow-inner overflow-hidden border border-white/10">
+                    {currentUser.avatar_url ? (
+                      <img src={currentUser.avatar_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      currentUser.display_name?.[0]?.toUpperCase() || currentUser.username?.[0]?.toUpperCase() || "U"
+                    )}
+                  </div>
+                  <div className="sm:hidden flex flex-col">
+                    <span className="font-bold text-sm text-slate-100 leading-snug">
+                      {currentUser.display_name || currentUser.username}
+                    </span>
+                    <span className="text-[10px] text-slate-500">Exprimez-vous</span>
+                  </div>
                 </div>
 
-                <form onSubmit={handlePublish} className="flex-1 flex flex-col gap-3.5">
+                <form onSubmit={handlePublish} className="flex-1 flex flex-col gap-3.5 w-full">
                   <textarea
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
@@ -1110,23 +1118,23 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
 
                   {/* Boutons d'importation de médias */}
                   <div className="flex justify-between items-center border-t border-white/5 pt-3 shrink-0">
-                    <div className="flex gap-2">
+                    <div className="flex gap-1.5">
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white px-3 py-2 rounded-xl hover:bg-white/5 transition-all"
+                        className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-bold text-slate-400 hover:text-white px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl hover:bg-white/5 transition-all"
                         disabled={publishing}
                       >
-                        <Image size={16} className="text-green-500" />
+                        <Image size={14} className="text-green-500 shrink-0" />
                         Photo/Vidéo
                       </button>
                       <button
                         type="button"
                         onClick={startCamera}
-                        className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white px-3 py-2 rounded-xl hover:bg-white/5 transition-all"
+                        className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-xs font-bold text-slate-400 hover:text-white px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl hover:bg-white/5 transition-all"
                         disabled={publishing}
                       >
-                        <Camera size={16} className="text-blue-500" />
+                        <Camera size={14} className="text-blue-500 shrink-0" />
                         Caméra
                       </button>
                     </div>
@@ -1142,7 +1150,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                     <button
                       type="submit"
                       disabled={publishing || (!content.trim() && !mediaFile)}
-                      className="btn-primary py-3 px-5 text-base font-extrabold rounded-xl cursor-pointer"
+                      className="btn-primary py-2 px-3.5 sm:py-3 sm:px-5 text-sm sm:text-base font-extrabold rounded-xl cursor-pointer mr-1 sm:mr-0"
                     >
                       {publishing ? <Loader2 size={15} className="animate-spin" /> : "Partager"}
                     </button>
@@ -1152,7 +1160,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
             </div>
 
             {/* FLUX DE POSTS */}
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 px-4 sm:px-0">
               {loading && posts.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
                   <Loader2 className="animate-spin text-blue-500" size={32} />

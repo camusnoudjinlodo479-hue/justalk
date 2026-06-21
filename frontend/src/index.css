@@ -286,6 +286,8 @@
     justify-content: space-around;
     z-index: 40;
     padding-bottom: env(safe-area-inset-bottom);
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
   .bottom-nav-item {
     flex: 1;
@@ -347,18 +349,14 @@
 
   .post-card {
     background: var(--bg-secondary);
-    border-top: 1px solid var(--border-color);
-    border-bottom: 1px solid var(--border-color);
-    border-left: none;
-    border-right: none;
-    border-radius: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
     margin-bottom: 0.65rem;
     overflow: hidden;
     width: 100%;
   }
   @media (min-width: 640px) {
     .post-card {
-      border: 1px solid var(--border-color);
       border-radius: 1.25rem;
       margin-bottom: 1.25rem;
     }
