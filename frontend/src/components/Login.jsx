@@ -9,7 +9,8 @@ export default function Login({ onLoginSuccess, onGoToRegister }) {
   const [username, setUsername] = useState("");
   const [passcode, setPasscode] = useState("");
   const [usePasscode, setUsePasscode] = useState(() => {
-    return typeof window === "undefined" || !window.PublicKeyCredential;
+    const hasBiometric = typeof window !== "undefined" && (!!window.PublicKeyCredential || !!window.AndroidBridge);
+    return !hasBiometric;
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -64,6 +65,53 @@ export default function Login({ onLoginSuccess, onGoToRegister }) {
       return;
     }
 
+    // --- Native Android Biometric Login ---
+    if (typeof window !== "undefined" && window.AndroidBridge) {
+      const storedKey = localStorage.getItem(`justalk_biometric_${cleanUsername}`);
+      if (!storedKey) {
+        setError("Aucune empreinte enregistrée sur cet appareil pour ce compte. Connectez-vous avec un code.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        await new Promise((resolve, reject) => {
+          window.onBiometricLoginResult = (success, errorMsg) => {
+            delete window.onBiometricLoginResult;
+            if (success) resolve();
+            else reject(new Error(errorMsg || "Authentification biométrique échouée."));
+          };
+          window.AndroidBridge.showBiometricPrompt("onBiometricLoginResult");
+        });
+
+        const res = await fetch("/api/auth/login-passcode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: cleanUsername, passcode: storedKey }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Connexion biométrique expirée.");
+        }
+
+        const verifyData = await res.json();
+        setSuccess(true);
+
+        setTimeout(() => {
+          onLoginSuccess(verifyData.user_id, cleanUsername);
+        }, 800);
+
+      } catch (err) {
+        console.error("Erreur connexion native biométrique :", err);
+        setError(err.message || "Authentification native échouée.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // --- WebAuthn Biometric Login ---
     try {
       // 1. Récupération des options d'authentification (challenge + allowCredentials)
       const optionsRes = await fetch("/api/webauthn/login-options", {
@@ -105,14 +153,14 @@ export default function Login({ onLoginSuccess, onGoToRegister }) {
       }, 800);
 
     } catch (err) {
-      console.error("Erreur connexion :", err);
+      console.error("Erreur connexion WebAuthn :", err);
       setError(err.message || "Impossible de se connecter.");
     } finally {
       setLoading(false);
     }
   };
 
-  const hasBiometricSupport = typeof window !== "undefined" && !!window.PublicKeyCredential;
+  const hasBiometricSupport = typeof window !== "undefined" && (!!window.PublicKeyCredential || !!window.AndroidBridge);
 
   return (
     <div className="w-full max-w-[480px] sm:max-w-lg p-8 sm:p-10 card-lg bg-white/80 backdrop-blur-lg border border-white/20 shadow-2xl relative overflow-hidden z-10">

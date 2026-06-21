@@ -11,7 +11,8 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
   const [displayName, setDisplayName] = useState("");
   const [passcode, setPasscode] = useState("");
   const [usePasscode, setUsePasscode] = useState(() => {
-    return typeof window === "undefined" || !window.PublicKeyCredential;
+    const hasBiometric = typeof window !== "undefined" && (!!window.PublicKeyCredential || !!window.AndroidBridge);
+    return !hasBiometric;
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -126,6 +127,57 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
       return;
     }
 
+    // --- Native Android Biometric Registration ---
+    if (typeof window !== "undefined" && window.AndroidBridge) {
+      try {
+        await new Promise((resolve, reject) => {
+          window.onBiometricRegisterResult = (success, errorMsg) => {
+            delete window.onBiometricRegisterResult;
+            if (success) resolve();
+            else reject(new Error(errorMsg || "Authentification biométrique échouée."));
+          };
+          window.AndroidBridge.showBiometricPrompt("onBiometricRegisterResult");
+        });
+
+        // Génération d'une clé d'authentification aléatoire forte pour ce téléphone
+        const randomPasscode = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+
+        const res = await fetch("/api/auth/register-passcode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: cleanUsername,
+            display_name: cleanDisplayName || cleanUsername,
+            passcode: randomPasscode,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Impossible de créer le compte.");
+        }
+
+        const data = await res.json();
+        
+        // Stocker la clé secrète dans le stockage privé de l'application
+        localStorage.setItem(`justalk_biometric_${cleanUsername}`, randomPasscode);
+        
+        setSuccess(true);
+        triggerConfetti();
+
+        setTimeout(() => {
+          onRegisterSuccess(data.user_id, cleanUsername);
+        }, 3500);
+
+      } catch (err) {
+        console.error("Erreur inscription native biométrique :", err);
+        setError(err.message || "Authentification native échouée.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     // Vérification minimale : WebAuthn doit être supporté (HTTPS requis)
     if (!window.PublicKeyCredential) {
       setError("Votre navigateur ne supporte pas la biométrie. Utilisez l'inscription par code.");
@@ -210,7 +262,7 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
     }
   };
 
-  const hasBiometricSupport = typeof window !== "undefined" && !!window.PublicKeyCredential;
+  const hasBiometricSupport = typeof window !== "undefined" && (!!window.PublicKeyCredential || !!window.AndroidBridge);
 
   return (
     <div className="w-full max-w-[480px] sm:max-w-lg p-8 sm:p-10 card-lg bg-white/80 backdrop-blur-lg border border-white/20 shadow-2xl relative overflow-hidden z-10">
