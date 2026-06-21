@@ -186,3 +186,14 @@ class ReelResponse(BaseModel):
 class ReelCommentCreate(BaseModel):
     reel_id: UUID
     content: str
+
+# --- Passcode Schemas ---
+class PasscodeRegistrationRequest(BaseModel):
+    username: str
+    display_name: Optional[str] = None
+    passcode: str
+
+class PasscodeLoginRequest(BaseModel):
+    username: str
+    passcode: str
+

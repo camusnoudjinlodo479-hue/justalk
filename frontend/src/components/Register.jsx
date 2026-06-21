@@ -3,12 +3,16 @@
 
 import { useState } from "react";
 import { create } from "@github/webauthn-json";
-import { User, ScanFace, ArrowRight, ShieldCheck, AlertCircle, Mic } from "lucide-react";
+import { User, ScanFace, ArrowRight, ShieldCheck, AlertCircle, Mic, KeyRound } from "lucide-react";
 import { triggerConfetti } from "../utils/confetti";
 
 export default function Register({ onRegisterSuccess, onGoToLogin }) {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [passcode, setPasscode] = useState("");
+  const [usePasscode, setUsePasscode] = useState(() => {
+    return typeof window === "undefined" || !window.PublicKeyCredential;
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -82,9 +86,49 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
       return;
     }
 
+    if (usePasscode) {
+      if (!passcode) {
+        setError("Le code secret est requis.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/auth/register-passcode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: cleanUsername,
+            display_name: cleanDisplayName || cleanUsername,
+            passcode,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Impossible de créer le compte.");
+        }
+
+        const data = await res.json();
+        setSuccess(true);
+        triggerConfetti();
+
+        setTimeout(() => {
+          onRegisterSuccess(data.user_id, cleanUsername);
+        }, 3500);
+
+      } catch (err) {
+        console.error("Erreur inscription passcode :", err);
+        setError(err.message || "Une erreur est survenue.");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     // Vérification minimale : WebAuthn doit être supporté (HTTPS requis)
     if (!window.PublicKeyCredential) {
-      setError("Votre navigateur ne supporte pas la biométrie. Utilisez Chrome ou Safari en HTTPS.");
+      setError("Votre navigateur ne supporte pas la biométrie. Utilisez l'inscription par code.");
       setLoading(false);
       return;
     }
@@ -106,7 +150,6 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
       }
 
       const options = await optionsRes.json();
-      console.log("WebAuthn options reçues :", options);
 
       // Étape 2 : Déclencher la biométrie via l'API WebAuthn du navigateur
       let attestation;
@@ -153,15 +196,11 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
 
       const verifyData = await verifyRes.json();
       setSuccess(true);
-
-      // Confettis !
-      console.log("Compte créé avec succès — confetti triggered");
-      triggerConfetti(); // Appel direct de la fonction importée
+      triggerConfetti();
 
       setTimeout(() => {
         onRegisterSuccess(verifyData.user_id, cleanUsername);
       }, 3500);
-
 
     } catch (err) {
       console.error("Erreur inscription :", err);
@@ -171,19 +210,26 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
     }
   };
 
+  const hasBiometricSupport = typeof window !== "undefined" && !!window.PublicKeyCredential;
+
   return (
     <div className="w-full max-w-[480px] sm:max-w-lg p-8 sm:p-10 card-lg bg-white/80 backdrop-blur-lg border border-white/20 shadow-2xl relative overflow-hidden z-10">
-      <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600" />
+      <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-600 via-sky-400 to-purple-600" />
       
       <div className="flex flex-col items-center text-center gap-6">
         <div className="w-20 h-20 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 animate-pulseRing relative mb-2">
-          <ScanFace size={40} />
+          {usePasscode ? <KeyRound size={40} /> : <ScanFace size={40} />}
         </div>
 
         <div>
-          <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-slate-800">Créer un compte</h2>
+          <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-slate-800">
+            {usePasscode ? "Créer un compte par code" : "Créer un compte"}
+          </h2>
           <p className="text-slate-500 mt-2 text-sm sm:text-base max-w-sm mx-auto">
-            Utilisez la biométrie (Face ID, Touch ID, Windows Hello) de votre appareil. Zéro mot de passe requis.
+            {usePasscode
+              ? "Choisissez un pseudo, votre nom et un code secret pour vous inscrire."
+              : "Utilisez la biométrie (Face ID, Touch ID, Windows Hello) de votre appareil. Zéro mot de passe requis."
+            }
           </p>
         </div>
 
@@ -239,18 +285,26 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
             </button>
           </div>
 
+          {usePasscode && (
+            <div className="relative animate-fadeIn">
+              <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+              <input
+                type="password"
+                placeholder="Code secret (ex: 123456)"
+                value={passcode}
+                onChange={(e) => setPasscode(e.target.value)}
+                className="input-pill pl-12 py-3.5 sm:py-4 text-sm sm:text-base bg-slate-100 text-slate-900 border-slate-200"
+                required
+                disabled={loading || success}
+              />
+            </div>
+          )}
+
           {error && (
-            error.includes("Ajoutez une empreinte dans Paramètres") ? (
-              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold flex items-center gap-2.5 text-left animate-scaleIn">
-                <AlertCircle size={18} className="shrink-0 text-amber-500" />
-                <span>{error}</span>
-              </div>
-            ) : (
-              <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold flex items-center gap-2.5 text-left animate-scaleIn">
-                <AlertCircle size={18} className="shrink-0" />
-                <span>{error}</span>
-              </div>
-            )
+            <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-600 text-sm font-semibold flex items-center gap-2.5 text-left animate-scaleIn">
+              <AlertCircle size={18} className="shrink-0" />
+              <span>{error}</span>
+            </div>
           )}
 
           {success && (
@@ -265,9 +319,23 @@ export default function Register({ onRegisterSuccess, onGoToLogin }) {
             disabled={loading || success}
             className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-sm sm:text-base font-bold cursor-pointer"
           >
-            {loading ? "Vérification de l'appareil..." : success ? "Enregistré !" : "Lancer le scan biométrique"}
+            {loading ? "Création..." : success ? "Enregistré !" : usePasscode ? "S'inscrire" : "Lancer le scan biométrique"}
             {!loading && !success && <ArrowRight size={20} />}
           </button>
+
+          {hasBiometricSupport && (
+            <button
+              type="button"
+              onClick={() => {
+                setUsePasscode(!usePasscode);
+                setError("");
+              }}
+              className="text-xs text-blue-600 font-bold hover:underline mt-1 cursor-pointer self-center"
+              disabled={loading || success}
+            >
+              {usePasscode ? "S'inscrire avec la biométrie de l'appareil" : "S'inscrire avec un code secret à la place"}
+            </button>
+          )}
         </form>
 
         <div className="w-full border-t border-slate-100 pt-5 text-center mt-2">

@@ -441,6 +441,89 @@ def logout(response: Response):
     )
     return {"status": "success"}
 
+# --- Authentification par Code Secret (Passcode Fallback) ---
+
+@app.post("/api/auth/register-passcode")
+def register_passcode(req: schemas.PasscodeRegistrationRequest, response: Response, db: Session = Depends(database.get_db)):
+    """Inscription alternative par code secret si la biométrie n'est pas supportée."""
+    import hashlib
+    username = req.username.strip().lower()
+    if not username:
+        raise HTTPException(status_code=400, detail="Le pseudo est obligatoire.")
+    
+    existing_user = db.query(models.User).filter(models.User.username == username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Ce pseudo est déjà pris.")
+    
+    user_uuid = uuid.uuid4()
+    db_user = models.User(
+        id=user_uuid,
+        username=username,
+        display_name=req.display_name or username
+    )
+    
+    passcode_hash = hashlib.sha256(req.passcode.encode()).hexdigest()
+    db_cred = models.Credential(
+        id=f"passcode_{username}",
+        user_id=db_user.id,
+        public_key=passcode_hash,
+        sign_count=0
+    )
+    
+    try:
+        db.add(db_user)
+        db.add(db_cred)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erreur d'écriture : {str(e)}")
+    
+    token = auth.create_session_token(str(db_user.id))
+    response.set_cookie(
+        key=auth.COOKIE_NAME,
+        value=token,
+        httponly=True,
+        max_age=30 * 24 * 60 * 60,
+        samesite="lax",
+        secure=True
+    )
+    return {"status": "success", "user_id": str(db_user.id)}
+
+@app.post("/api/auth/login-passcode")
+def login_passcode(req: schemas.PasscodeLoginRequest, response: Response, db: Session = Depends(database.get_db)):
+    """Connexion alternative par code secret."""
+    import hashlib
+    username = req.username.strip().lower()
+    if not username:
+        raise HTTPException(status_code=400, detail="Le pseudo est obligatoire.")
+    
+    db_user = db.query(models.User).filter(models.User.username == username).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Pseudo introuvable.")
+    
+    db_cred = db.query(models.Credential).filter(
+        models.Credential.id == f"passcode_{username}",
+        models.Credential.user_id == db_user.id
+    ).first()
+    
+    if not db_cred:
+        raise HTTPException(status_code=400, detail="Ce compte a été enregistré avec la biométrie (ou n'a pas de code secret).")
+    
+    passcode_hash = hashlib.sha256(req.passcode.encode()).hexdigest()
+    if db_cred.public_key != passcode_hash:
+        raise HTTPException(status_code=400, detail="Code secret incorrect.")
+    
+    token = auth.create_session_token(str(db_user.id))
+    response.set_cookie(
+        key=auth.COOKIE_NAME,
+        value=token,
+        httponly=True,
+        max_age=30 * 24 * 60 * 60,
+        samesite="lax",
+        secure=True
+    )
+    return {"status": "success", "user_id": str(db_user.id)}
+
 
 # --- Publications (Posts) ---
 
