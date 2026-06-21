@@ -1,6 +1,6 @@
 // frontend/src/components/CallScreen.jsx
 import { useState, useEffect, useRef } from "react";
-import { Mic, MicOff, Video, VideoOff, PhoneOff, Phone, User, Loader2, Lock } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Phone, User, Loader2, Lock, Sparkles } from "lucide-react";
 
 export default function CallScreen({ roomId, currentUser, callType, isIncoming, callerName, onClose }) {
   const [localStream, setLocalStream] = useState(null);
@@ -9,6 +9,7 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
   const [hideVideo, setHideVideo] = useState(callType === "audio");
   const [isAccepted, setIsAccepted] = useState(!isIncoming);
   const [status, setStatus] = useState(isIncoming ? "Appel entrant..." : "Appel en cours...");
+  const [enhancerEnabled, setEnhancerEnabled] = useState(true);
   
   const localVideoRef = useRef(null);
   const peersRef = useRef({}); // peerId -> RTCPeerConnection
@@ -230,7 +231,11 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
       // Obtenir micro/caméra
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: true,
-        video: callType === "video" ? { width: 480, height: 640 } : false
+        video: callType === "video" ? {
+          width: { ideal: 3840, min: 1280 },
+          height: { ideal: 2160, min: 720 },
+          frameRate: { ideal: 30, max: 60 }
+        } : false
       });
       
       setLocalStream(stream);
@@ -474,6 +479,29 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
     <div className={`call-screen text-white flex flex-col justify-between ${
       (!isAccepted || callType === "audio") ? "bg-whatsapp-call" : "bg-slate-950"
     }`}>
+      {/* SVG Filter for Snapchat Beauty Effect */}
+      <svg width="0" height="0" style={{ position: 'absolute', zIndex: -1 }}>
+        <filter id="beauty-filter">
+          <feGaussianBlur stdDeviation="1.5" result="blur" />
+          <feColorMatrix type="matrix" values="
+            1 0 0 0 0.05
+            0 1 0 0 0.05
+            0 0 1 0 0.05
+            0 0 0 1 0" in="blur" result="glow" />
+          <feMerge>
+            <feMergeNode in="SourceGraphic" />
+            <feMergeNode in="glow" opacity="0.35" />
+          </feMerge>
+        </filter>
+      </svg>
+      
+      {/* Custom Styles for video filters */}
+      <style>{`
+        .snap-enhancer {
+          filter: url(#beauty-filter) saturate(1.08) contrast(1.02);
+          image-rendering: auto;
+        }
+      `}</style>
       
       {/* 1. APPEL ENTRANT (NON ACCEPTE) */}
       {!isAccepted && (
@@ -554,6 +582,7 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
                   autoPlay
                   playsInline
                   muted
+                  className={enhancerEnabled ? "snap-enhancer" : ""}
                 />
               </div>
             )}
@@ -573,6 +602,7 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
                       }}
                       autoPlay
                       playsInline
+                      className={enhancerEnabled ? "snap-enhancer" : ""}
                     />
                   ) : (
                     // Si audio-only, afficher l'avatar pulsant style WhatsApp
@@ -635,6 +665,17 @@ export default function CallScreen({ roomId, currentUser, callType, isIncoming, 
                 title={hideVideo ? "Activer caméra" : "Désactiver caméra"}
               >
                 {hideVideo ? <VideoOff size={20} /> : <Video size={20} />}
+              </button>
+            )}
+
+            {/* Snap Enhancer Toggle */}
+            {callType === "video" && (
+              <button
+                onClick={() => setEnhancerEnabled(!enhancerEnabled)}
+                className={`control-btn mute ${enhancerEnabled ? 'active bg-gradient-to-r from-pink-500 to-amber-500 text-white' : ''}`}
+                title={enhancerEnabled ? "Désactiver l'effet Enhancer" : "Activer l'effet Enhancer"}
+              >
+                <Sparkles size={20} />
               </button>
             )}
 
