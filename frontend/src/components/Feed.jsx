@@ -5,7 +5,7 @@ import { useEffect, useState, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { 
   Plus, Trash2, Heart, MessageCircle, Image, Send, X, Loader2, LogOut, 
-  Users, Bell, Camera, Video, StopCircle, ChevronLeft, Mic, Film, 
+  Users, Bell, Camera, Video, StopCircle, ChevronLeft, ChevronRight, Mic, Film, 
   Phone, Shield, User, Sparkles, PhoneCall, PhoneMissed, PhoneIncoming,
   MoreHorizontal
 } from "lucide-react";
@@ -741,6 +741,24 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
     setStoryProgress(0);
   };
 
+  const handleNextStory = () => {
+    const currentIndex = stories.findIndex(s => s.id === selectedStory?.id);
+    if (currentIndex !== -1 && currentIndex < stories.length - 1) {
+      setSelectedStory(stories[currentIndex + 1]);
+      setStoryProgress(0);
+    } else {
+      setSelectedStory(null);
+    }
+  };
+
+  const handlePrevStory = () => {
+    const currentIndex = stories.findIndex(s => s.id === selectedStory?.id);
+    if (currentIndex > 0) {
+      setSelectedStory(stories[currentIndex - 1]);
+      setStoryProgress(0);
+    }
+  };
+
   useEffect(() => {
     let interval = null;
     if (selectedStory) {
@@ -749,10 +767,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
       
       interval = setInterval(() => {
         setStoryProgress((prev) => {
-          if (prev >= 100) {
-            setSelectedStory(null);
-            return 0;
-          }
+          if (prev >= 100) return 100;
           return prev + 2;
         });
       }, 100);
@@ -761,6 +776,12 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
       if (interval) clearInterval(interval);
     };
   }, [selectedStory]);
+
+  useEffect(() => {
+    if (storyProgress >= 100 && selectedStory) {
+      handleNextStory();
+    }
+  }, [storyProgress, selectedStory, stories]);
 
   const formatMessageTime = (dateStr) => {
     const d = new Date(dateStr);
@@ -1908,11 +1929,12 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
 
       {/* STORY VIEWER OVERLAY */}
       {selectedStory && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4">
-          <div className="relative w-full max-w-sm h-[80vh] bg-slate-900 rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between p-4">
+        <div className="fixed inset-0 bg-black z-50 flex items-center justify-center animate-fadeIn">
+          {/* Main Container: Full screen on mobile, max-width/centered on desktop, Facebook-style */}
+          <div className="relative w-full h-full sm:h-[92vh] sm:max-w-md bg-slate-950 sm:rounded-3xl overflow-hidden shadow-2xl flex flex-col justify-between sm:border sm:border-white/10">
             
             {/* Top Bar Story */}
-            <div className="absolute top-0 inset-x-0 p-4 bg-gradient-to-b from-black/85 to-transparent flex flex-col gap-3 z-35">
+            <div className="absolute top-0 inset-x-0 p-4 bg-gradient-to-b from-black/80 via-black/40 to-transparent flex flex-col gap-3 z-30 pt-[calc(1rem+env(safe-area-inset-top))]">
               {/* Ligne progression */}
               <div className="w-full h-[3px] bg-white/20 rounded-full overflow-hidden">
                 <div className="h-full bg-white transition-all duration-100" style={{ width: `${storyProgress}%` }} />
@@ -1921,7 +1943,7 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
               {/* Infos Auteur */}
               <div className="flex justify-between items-center text-white">
                 <div className="flex items-center gap-2">
-                  <div className="w-7.5 h-7.5 rounded-full bg-white/20 flex items-center justify-center font-bold text-[10px] overflow-hidden">
+                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold text-xs overflow-hidden border border-white/10 shrink-0">
                     {selectedStory.author_avatar_url ? (
                       <img src={selectedStory.author_avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (
@@ -1929,24 +1951,41 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
                     )}
                   </div>
                   <div>
-                    <h5 className="text-[11px] font-bold">
+                    <h5 className="text-xs font-bold leading-tight">
                       {selectedStory.author_display_name || selectedStory.author_username}
                     </h5>
-                    <p className="text-[8px] text-white/50">@{selectedStory.author_username}</p>
+                    <p className="text-[10px] text-white/50">@{selectedStory.author_username}</p>
                   </div>
                 </div>
 
                 <button 
                   onClick={() => setSelectedStory(null)} 
-                  className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center text-white"
+                  className="w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 flex items-center justify-center text-white border border-white/5 transition-colors z-30"
+                  title="Fermer"
                 >
-                  <X size={14} />
+                  <X size={16} />
                 </button>
               </div>
             </div>
 
             {/* Media Content */}
-            <div className="flex-1 flex items-center justify-center bg-black">
+            <div className="flex-1 w-full h-full flex items-center justify-center bg-black relative select-none">
+              {/* Invisible tap areas for story navigation */}
+              <div 
+                className="absolute inset-y-0 left-0 w-[30%] z-20 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePrevStory();
+                }}
+              />
+              <div 
+                className="absolute inset-y-0 right-0 w-[70%] z-20 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNextStory();
+                }}
+              />
+
               {selectedStory.media_url.includes(".webm") || selectedStory.media_url.includes(".mp4") ? (
                 <video 
                   src={selectedStory.media_url} 
@@ -1963,8 +2002,32 @@ export default function Feed({ currentUser, setCurrentUser, onLogout }) {
               )}
             </div>
 
+            {/* Desktop Navigation Arrows */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePrevStory();
+              }}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-35 hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 text-slate-300 hover:text-white transition-all border border-white/10 disabled:opacity-30 disabled:pointer-events-none active:scale-95"
+              disabled={stories.findIndex(s => s.id === selectedStory.id) === 0}
+              title="Précédent"
+            >
+              <ChevronLeft size={22} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNextStory();
+              }}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-35 hidden sm:flex items-center justify-center w-10 h-10 rounded-full bg-black/45 hover:bg-black/65 text-slate-300 hover:text-white transition-all border border-white/10 disabled:opacity-30 disabled:pointer-events-none active:scale-95"
+              disabled={stories.findIndex(s => s.id === selectedStory.id) === stories.length - 1}
+              title="Suivant"
+            >
+              <ChevronRight size={22} />
+            </button>
+
             {/* Expire text */}
-            <div className="absolute bottom-4 inset-x-0 text-center text-white/40 text-[9px] font-medium z-30">
+            <div className="absolute bottom-6 inset-x-0 text-center text-white/40 text-[10px] font-medium z-30 pointer-events-none">
               Expire à {new Date(selectedStory.expires_at).toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit' })}
             </div>
 
